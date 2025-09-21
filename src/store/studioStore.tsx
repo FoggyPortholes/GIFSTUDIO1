@@ -311,14 +311,32 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
   }
 }
 
+function createDefaultSettings(): StudioSettings {
+  return {
+    preferProcedural: true,
+    enableLocalAi: false,
+    stableDiffusionAutoDownload: true,
+    stableDiffusionReady: false,
+    stableDiffusionPath: undefined,
+    stableDiffusionVersion: undefined,
+    aiEndpoint: undefined,
+    aiApiKey: undefined,
+    aiModel: undefined,
+  };
+}
+
 export function createInitialState(): StudioState {
+  const defaults = createDefaultSettings();
   if (typeof window !== 'undefined') {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as StudioState;
         if (parsed && parsed.characters?.length) {
-          return parsed;
+          return {
+            ...parsed,
+            settings: { ...defaults, ...parsed.settings },
+          };
         }
       } catch (error) {
         console.warn('Failed to parse saved studio state', error);
@@ -336,9 +354,7 @@ export function createInitialState(): StudioState {
     brushColor: character.palette[0],
     brushMode: 'paint',
     pixelScale: 16,
-    settings: {
-      preferProcedural: true,
-    },
+    settings: defaults,
   };
 }
 
