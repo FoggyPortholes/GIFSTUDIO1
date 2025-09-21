@@ -2,14 +2,30 @@
   "name": "gif-studio-spicy-pickle",
   "version": "1.3.1",
   "private": true,
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.17.0"
+  },
   "scripts": {
     "dev": "vite",
+    "start": "npm run dev",
     "build": "vite build",
     "serve": "vite preview",
-    "test:gif": "node tests/encode_node.mjs",
-    "test:ai": "tsc -p tsconfig.test.json && node build-tests/tests/stableDiffusionIntegration.test.js",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx,.mjs",
+    "lint:fix": "npm run lint -- --fix",
     "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "clean": "node -e \"const fs=require('fs');['dist','build-tests'].forEach((p)=>fs.rmSync(p,{force:true,recursive:true}));\"",
+    "clean:all": "node -e \"const fs=require('fs');['dist','build-tests','node_modules'].forEach((p)=>fs.rmSync(p,{force:true,recursive:true}));\"",
+    "build:tests": "tsc -p tsconfig.test.json",
+    "test:gif": "node tests/encode_node.mjs",
+    "test:ai": "npm run build:tests && node build-tests/tests/stableDiffusionIntegration.test.js",
+    "test": "npm run test:gif && npm run test:ai",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "install:ci": "npm ci",
+    "portable:reset": "node -e \"const fs=require('fs');['config/last-install.sha256','config/lastport.txt'].forEach(f=>fs.rmSync(f,{force:true}));['node_modules','node-portable','dist','build-tests'].forEach(p=>fs.rmSync(p,{force:true,recursive:true}));\"",
+    "portable:simulate": "npm run portable:reset && npm run install:ci && npm run check && npm run build",
     "verify": "node -e \"try{require('fs').accessSync('public/animation.gif')}catch(e){process.exit(1)}\" && echo OK"
   },
   "dependencies": {
@@ -18,14 +34,14 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.5.4",
-    "vite": "^6.0.0",
-    "eslint": "^9.11.1",
-    "@typescript-eslint/parser": "^8.8.1",
-    "@typescript-eslint/eslint-plugin": "^8.8.1",
-    "prettier": "^3.3.3",
     "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1"
+    "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "^8.8.1",
+    "@typescript-eslint/parser": "^8.8.1",
+    "@vitejs/plugin-react": "^4.2.0",
+    "eslint": "^9.11.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "vite": "^6.0.0"
   }
 }
