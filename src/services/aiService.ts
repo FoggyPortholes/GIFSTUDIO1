@@ -24,6 +24,7 @@ interface AIImageResponse {
   imageUrl: string;
   pixels?: PixelColor[];
   source: AIImageSource;
+  referenceUrl?: string;
 }
 
 interface AIGifResponse {
@@ -706,14 +707,23 @@ async function callRemoteEndpoint(request: AIRequest): Promise<AIImageResponse |
 }
 
 export async function generateAIImage(request: AIRequest): Promise<AIImageResponse> {
-  const local = await callLocalStableDiffusion(request);
-  if (local) {
-    return local;
+  const [local, remote] = await Promise.all([
+    callLocalStableDiffusion(request),
+    callRemoteEndpoint(request),
+  ]);
+
+  if (remote && local) {
+    return { ...local, imageUrl: remote.imageUrl, source: remote.source, referenceUrl: local.imageUrl };
   }
-  const remote = await callRemoteEndpoint(request);
+
   if (remote) {
     return remote;
   }
+
+  if (local) {
+    return local;
+  }
+
   const pixels = stylizedPixels(request, { emphasis: 'procedural' });
   const imageUrl = pixelsToDataUrl(pixels, request.width, request.height);
   return { imageUrl, pixels, source: 'procedural' };

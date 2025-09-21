@@ -21,6 +21,7 @@ export function AIGeneratorPanel() {
   const [seed, setSeed] = useState<number>(42);
   const [preview, setPreview] = useState<string | null>(null);
   const [gifPreview, setGifPreview] = useState<string | null>(null);
+  const [referencePreview, setReferencePreview] = useState<string | null>(null);
   const [gifFrames, setGifFrames] = useState<string[]>([]);
   const [status, setStatus] = useState<string>('');
   const [setupPhase, setSetupPhase] = useState<StableDiffusionSetupProgress['phase']>('checking');
@@ -112,6 +113,7 @@ export function AIGeneratorPanel() {
         settings: state.settings,
       });
       setPreview(result.imageUrl);
+      setReferencePreview(result.referenceUrl ?? null);
       setStatus(
         `Sprite generated via ${
           result.source === 'local'
@@ -409,6 +411,12 @@ export function AIGeneratorPanel() {
       <div className="panel">
         <div className="panel-header">Preview</div>
         {preview ? <img src={preview} alt="AI sprite" className="preview-image" /> : <p>No sprite yet.</p>}
+        {referencePreview && (
+          <div className="reference-preview">
+            <div className="reference-preview__label">Palette reference</div>
+            <img src={referencePreview} alt="Palette reference" className="preview-image reference-preview__image" />
+          </div>
+        )}
         {gifPreview ? <img src={gifPreview} alt="AI gif" className="preview-gif" /> : <p>No GIF yet.</p>}
         {gifFrames.length > 0 && (
           <div className="frame-strip">
