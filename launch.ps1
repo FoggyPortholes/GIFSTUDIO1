@@ -61,14 +61,17 @@ function Invoke-Npm {
     $cmdArgs = @("/d", "/s", "/c", $wrappedCommand)
 
     if ($LogPath) {
-        & $cmdExe $cmdArgs | Tee-Object -FilePath $LogPath
+        $output = & $cmdExe $cmdArgs | Tee-Object -FilePath $LogPath
     } else {
-        & $cmdExe $cmdArgs
+        $output = & $cmdExe $cmdArgs
     }
 
     if ($LASTEXITCODE -ne 0) {
-        throw "npm command failed with exit code $LASTEXITCODE"
+        $commandDisplay = "$npmExecutable $($effectiveArguments -join ' ')"
+        throw "npm command failed with exit code $LASTEXITCODE while running: $commandDisplay"
     }
+
+    return $output
 }
 
 function Start-NpmProcess {
@@ -189,6 +192,71 @@ function Ensure-NodePortable {
     return $nodeExePath
 }
 
+function Resolve-NpmExecutable {
+    param(
+        [string]$NodeExe
+    )
+
+    $nodeDir = Split-Path -Parent $NodeExe
+    $candidateCmds = @(
+        Join-Path $nodeDir "npm.cmd",
+        Join-Path $nodeDir "node_modules\npm\bin\npm.cmd"
+    ) | Where-Object { Test-Path $_ }
+
+    if ($candidateCmds) {
+        $cmdPath = $candidateCmds | Select-Object -First 1
+        return [PSCustomObject]@{
+            Executable    = $cmdPath
+            BootstrapArgs = @()
+            Source        = $cmdPath
+            IsSystem      = $false
+        }
+    }
+
+    $npmCliJs = Join-Path $nodeDir "node_modules\npm\bin\npm-cli.js"
+    if (Test-Path $npmCliJs) {
+        return [PSCustomObject]@{
+            Executable    = $NodeExe
+            BootstrapArgs = @($npmCliJs)
+            Source        = $npmCliJs
+            IsSystem      = $false
+        }
+    }
+
+    $systemNpm = $null
+    foreach ($name in @("npm.cmd", "npm")) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($cmd) {
+            $resolvedPath = $null
+            if ($cmd.PSObject.Properties.Match('Path')) {
+                $resolvedPath = $cmd.Path
+            }
+            if (-not $resolvedPath -and $cmd.PSObject.Properties.Match('Source')) {
+                $resolvedPath = $cmd.Source
+            }
+            if (-not $resolvedPath -and $cmd.PSObject.Properties.Match('Definition')) {
+                $resolvedPath = $cmd.Definition
+            }
+
+            if ($resolvedPath) {
+                $systemNpm = $resolvedPath
+                break
+            }
+        }
+    }
+
+    if ($systemNpm) {
+        return [PSCustomObject]@{
+            Executable    = $systemNpm
+            BootstrapArgs = @()
+            Source        = "system npm at $systemNpm"
+            IsSystem      = $true
+        }
+    }
+
+    Write-ErrorAndExit "Unable to locate npm alongside Node.js or on PATH."
+}
+
 function Get-FileHashHex {
     param(
         [string]$Path
@@ -220,30 +288,32 @@ function Ensure-Dependencies {
         return
     }
 
-    if (Test-Path "node_modules") {
-        Write-Step "Removing outdated node_modules..."
-        Remove-Item -Path "node_modules" -Recurse -Force
+    $logPath = "logs/install.log"
+    $installArgs = if (Test-Path $lockFile) { @("ci") } else { @("install") }
+    $installLabel = "npm $($installArgs -join ' ')"
+    Write-Step "Installing dependencies using $installLabel (log: $logPath)"
+
+    $attempt = 1
+    while ($true) {
+        try {
+            Invoke-Npm -Arguments $installArgs -LogPath $logPath | Out-Null
+            break
+        } catch {
+            $errorMessage = $_.Exception.Message
+            if ($attempt -ge 2) {
+                Write-ErrorAndExit "Dependency installation failed after retry. See $logPath for details.`n$errorMessage"
+            }
+
+            Write-Warn "$installLabel failed on attempt $attempt. $errorMessage"
+            if (Test-Path "node_modules") {
+                Write-Step "Removing node_modules before retry..."
+                Remove-Item -Path "node_modules" -Recurse -Force
+            }
+            $attempt++
+        }
     }
 
-    $logPath = "logs/install.log"
-    Write-Step "Installing dependencies..."
-    try {
-        if (Test-Path $lockFile) {
-            Invoke-Npm -Arguments @("ci") -LogPath $logPath
-        } else {
-            Invoke-Npm -Arguments @("install") -LogPath $logPath
-        }
-    } catch {
-        Write-Warn "Dependency installation failed. Retrying with a clean state..."
-        if (Test-Path "node_modules") {
-            Remove-Item -Path "node_modules" -Recurse -Force
-        }
-        if (Test-Path $lockFile) {
-            Invoke-Npm -Arguments @("ci") -LogPath $logPath
-        } else {
-            Invoke-Npm -Arguments @("install") -LogPath $logPath
-        }
-    }
+    Write-Step "Dependencies installed successfully."
 
     if ($lockHash) {
         Set-Content -Path $installMarker -Value $lockHash
@@ -299,31 +369,31 @@ function Start-App {
 $nodeExe = Ensure-NodePortable -Destination (Join-Path $CURRENT_DIR "node-portable")
 $nodeBin = Split-Path $nodeExe
 
-$npmExecutable = $null
 $npmBootstrapArgs = @()
-$npmSource = $null
 
-$npmCmd = Join-Path $nodeBin "npm.cmd"
-$npmCliJs = Join-Path $nodeBin "node_modules\npm\bin\npm-cli.js"
+$npmInfo = Resolve-NpmExecutable -NodeExe $nodeExe
+$npmExecutable = $npmInfo.Executable
+$npmBootstrapArgs = $npmInfo.BootstrapArgs
+$npmSource = $npmInfo.Source
 
-if (Test-Path $npmCmd) {
-    $npmExecutable = $npmCmd
-    $npmBootstrapArgs = @()
-    $npmSource = $npmCmd
-} elseif (Test-Path $npmCliJs) {
-    $npmExecutable = $nodeExe
-    $npmBootstrapArgs = @($npmCliJs)
-    $npmSource = $npmCliJs
-} else {
-    Write-ErrorAndExit "Unable to locate npm alongside Node.js."
+Write-Step "Node executable: $nodeExe"
+$nodeVersion = (& $nodeExe -v | Select-Object -Last 1).Trim()
+if ($nodeVersion) {
+    Write-Step "Node version: $nodeVersion"
 }
 
-Write-Step "Using Node.js located at $nodeBin"
-& $nodeExe -v
-if ($npmSource) {
+if ($npmInfo.IsSystem) {
+    Write-Warn "npm portable not found. Falling back to $npmSource"
+} else {
     Write-Step "Using npm located at $npmSource"
 }
-Invoke-Npm -Arguments @("-v")
+$npmVersion = Invoke-Npm -Arguments @("-v")
+if ($npmVersion) {
+    $npmVersionString = ($npmVersion | Select-Object -Last 1).Trim()
+    if ($npmVersionString) {
+        Write-Step "npm version: $npmVersionString"
+    }
+}
 
 Ensure-Dependencies
 
