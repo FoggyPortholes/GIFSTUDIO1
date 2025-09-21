@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { STORAGE_KEY, createInitialState, useStudioStore } from '../../store/studioStore';
 import { StudioState } from '../../types';
+import { logError, logInfo, logWarn } from '../../services/logger';
 
 export function SettingsPanel() {
   const { state, dispatch } = useStudioStore();
@@ -14,18 +15,31 @@ export function SettingsPanel() {
     link.download = 'pixel-persona-project.json';
     link.click();
     URL.revokeObjectURL(url);
+    logInfo('Project exported', {
+      characters: state.characters.length,
+      frames: state.characters.reduce((count, character) => count + character.frames.length, 0),
+    });
   };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    logInfo('Project import requested', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as StudioState;
       if (!parsed.characters?.length) throw new Error('Invalid project file');
       dispatch({ type: 'HYDRATE', state: parsed });
+      logInfo('Project import completed', {
+        name: file.name,
+        characters: parsed.characters.length,
+      });
     } catch (error) {
-      console.error(error);
+      logError('Failed to import project file', { error, name: file.name });
       alert('Failed to import project file.');
     } finally {
       if (fileInput.current) fileInput.current.value = '';
@@ -37,6 +51,7 @@ export function SettingsPanel() {
     const fresh = createInitialState();
     dispatch({ type: 'HYDRATE', state: fresh });
     window.localStorage.removeItem(STORAGE_KEY);
+    logWarn('Studio reset to initial state');
   };
 
   return (

@@ -2,7 +2,7 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { CharacterModel, Frame, PixelColor } from '../types';
 import { composeFrame } from '../utils/frame';
 import { hexToRgba } from '../utils/color';
-import { log, setLastGif } from './logger';
+import { logInfo, setLastGif } from './logger';
 
 function pixelsToRgba(pixels: PixelColor[], width: number, height: number) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -77,7 +77,13 @@ export async function exportAnimationGif(character: CharacterModel): Promise<str
   const buffer = finish();
   const u8 = new Uint8Array(buffer);
   setLastGif(u8);
-  log('INFO', 'Exported animation', { frames: character.frames.length, bytes: u8.byteLength });
+  logInfo('Exported animation', {
+    characterId: character.id,
+    frames: character.frames.length,
+    bytes: u8.byteLength,
+    width,
+    height,
+  });
   const blob = new Blob([u8], { type: 'image/gif' });
   return URL.createObjectURL(blob);
 }

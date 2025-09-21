@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useStudioStore, useActiveCharacter } from '../../store/studioStore';
 import { composeFrame, pixelIndex } from '../../utils/frame';
 import { exportAnimationGif, exportFrameAsDataUrl } from '../../services/imageService';
+import { logDebug, logError, logInfo } from '../../services/logger';
 
 export function AnimationStudio() {
   const { state, dispatch } = useStudioStore();
@@ -73,6 +74,10 @@ export function AnimationStudio() {
   }, [activeIndex, isPlaying]);
 
   const handleExport = async () => {
+    logInfo('GIF export requested', {
+      characterId: character.id,
+      frames: frames.length,
+    });
     setExporting(true);
     if (exportUrl) {
       URL.revokeObjectURL(exportUrl);
@@ -81,8 +86,13 @@ export function AnimationStudio() {
     try {
       const url = await exportAnimationGif(character);
       setExportUrl(url);
+      logInfo('GIF export completed', {
+        characterId: character.id,
+        frames: frames.length,
+        urlLength: url.length,
+      });
     } catch (error) {
-      console.error(error);
+      logError('Failed to export GIF', { error, characterId: character.id });
       alert('Failed to export GIF. See console for details.');
     } finally {
       setExporting(false);
@@ -192,13 +202,26 @@ export function AnimationStudio() {
               type="button"
               onClick={async () => {
                 try {
+                  logInfo('Frame PNG export requested', {
+                    characterId: character.id,
+                    frameId: frame.id,
+                  });
                   const url = await exportFrameAsDataUrl(character, frame);
                   const link = document.createElement('a');
                   link.href = url;
                   link.download = `${frame.name.replace(/\s+/g, '_')}.png`;
                   link.click();
+                  logDebug('Frame PNG export completed', {
+                    characterId: character.id,
+                    frameId: frame.id,
+                    urlLength: url.length,
+                  });
                 } catch (error) {
-                  console.error(error);
+                  logError('Failed to export frame PNG', {
+                    error,
+                    characterId: character.id,
+                    frameId: frame.id,
+                  });
                   alert('Unable to export frame to PNG.');
                 }
               }}
