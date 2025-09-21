@@ -5,6 +5,9 @@ import { AnimationStudio } from './components/studio/AnimationStudio';
 import { AIGeneratorPanel } from './components/studio/AIGeneratorPanel';
 import { AssetLibrary } from './components/studio/AssetLibrary';
 import { SettingsPanel } from './components/studio/SettingsPanel';
+import { VersionBadge } from './components/common/VersionBadge';
+import { useUpdateWatcher } from './hooks/useVersionInfo';
+import type { VersionManifest } from './hooks/useVersionInfo';
 
 import './styles.css';
 
@@ -35,9 +38,17 @@ function ViewRenderer({ active }: { active: ViewKey }) {
   }
 }
 
+function formatManifestLabel(manifest?: VersionManifest | null) {
+  if (!manifest) {
+    return 'New build available';
+  }
+  return `v${manifest.version}${manifest.gitHash ? ` (${manifest.gitHash})` : ''}`;
+}
+
 function AppShell() {
   const [activeView, setActiveView] = useState<ViewKey>('designer');
   const activeNav = useMemo(() => NAVIGATION.find((item) => item.key === activeView), [activeView]);
+  const { currentVersion, latestVersion, updateAvailable, relaunch } = useUpdateWatcher();
 
   return (
     <div className="app-shell">
@@ -46,8 +57,20 @@ function AppShell() {
           <h1>Pixel Persona Studio</h1>
           <p className="subtitle">Create normalized pixel characters, orchestrate animations and experiment with AI-driven variations.</p>
         </div>
-        <div className="version">Studio Core v2.0</div>
+        <VersionBadge version={currentVersion} />
       </header>
+      {updateAvailable && (
+        <div className="update-banner" role="status" aria-live="polite">
+          <div className="update-banner__details">
+            <span className="update-banner__title">Update available</span>
+            <span className="update-banner__version">{formatManifestLabel(latestVersion)}</span>
+            <span className="update-banner__current">Current: {formatManifestLabel(currentVersion)}</span>
+          </div>
+          <button type="button" className="update-banner__action" onClick={relaunch}>
+            Relaunch now
+          </button>
+        </div>
+      )}
       <div className="app-body">
         <nav className="side-nav" aria-label="Studio sections">
           <ul className="side-nav__list">
