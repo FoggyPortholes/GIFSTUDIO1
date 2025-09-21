@@ -301,8 +301,56 @@ export function CharacterDesigner() {
     () => composeFrame(frame, character.width, character.height),
     [frame, character.width, character.height]
   );
+  const onionLayers = useMemo<PixelColor[][]>(() => {
+    if (!state.onionSkin.enabled) {
+      return [];
+    }
+    const activeIndex = character.frames.findIndex((candidate) => candidate.id === frame.id);
+    if (activeIndex < 0) {
+      return [];
+    }
+
+    const tintFrame = (colors: PixelColor[], tint: string, distance: number) => {
+      const ratio = Math.min(1, TINT_BLEND_RATIO / Math.max(1, distance));
+      return colors.map((color) => (color ? blendHexColors(color, tint, ratio) : null));
+    };
+
+    const tintedLayers: PixelColor[][] = [];
+    const maxPrevious = Math.min(state.onionSkin.previous, activeIndex);
+    for (let offset = maxPrevious; offset >= 1; offset -= 1) {
+      const sourceFrame = character.frames[activeIndex - offset];
+      const tinted = tintFrame(
+        composeFrame(sourceFrame, character.width, character.height),
+        PREVIOUS_TINT,
+        offset
+      );
+      tintedLayers.push(tinted);
+    }
+
+    const maxNext = Math.min(state.onionSkin.next, character.frames.length - activeIndex - 1);
+    for (let offset = maxNext; offset >= 1; offset -= 1) {
+      const sourceFrame = character.frames[activeIndex + offset];
+      const tinted = tintFrame(
+        composeFrame(sourceFrame, character.width, character.height),
+        NEXT_TINT,
+        offset
+      );
+      tintedLayers.push(tinted);
+    }
+
+    return tintedLayers;
+  }, [
+    state.onionSkin.enabled,
+    state.onionSkin.previous,
+    state.onionSkin.next,
+    character.frames,
+    character.width,
+    character.height,
+    frame.id,
+  ]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const canvasInstructionsId = useId();
 
   useEffect(() => {
     const canvas = canvasRef.current;
