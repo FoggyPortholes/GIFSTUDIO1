@@ -48,7 +48,9 @@ function Invoke-Npm {
     )
 
     $command = Get-CmdInvocationString -Executable $npmCmd -Arguments $Arguments
-    $cmdArgs = @("/d", "/s", "/c", $command)
+    # Wrap the entire command so cmd.exe handles paths that contain spaces.
+    $wrappedCommand = '"' + $command + '"'
+    $cmdArgs = @("/d", "/s", "/c", $wrappedCommand)
 
     if ($LogPath) {
         & $cmdExe $cmdArgs | Tee-Object -FilePath $LogPath
@@ -67,7 +69,9 @@ function Start-NpmProcess {
     )
 
     $command = Get-CmdInvocationString -Executable $npmCmd -Arguments $Arguments
-    $cmdArgs = @("/d", "/s", "/c", $command)
+    # Wrap the entire command so cmd.exe handles paths that contain spaces.
+    $wrappedCommand = '"' + $command + '"'
+    $cmdArgs = @("/d", "/s", "/c", $wrappedCommand)
 
     return Start-Process -FilePath $cmdExe -ArgumentList $cmdArgs -WorkingDirectory $CURRENT_DIR -PassThru -NoNewWindow
 }
