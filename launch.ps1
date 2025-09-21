@@ -47,7 +47,15 @@ function Invoke-Npm {
         [string]$LogPath
     )
 
-    $command = Get-CmdInvocationString -Executable $npmCmd -Arguments $Arguments
+    $effectiveArguments = @()
+    if ($npmBootstrapArgs) {
+        $effectiveArguments += $npmBootstrapArgs
+    }
+    if ($Arguments) {
+        $effectiveArguments += $Arguments
+    }
+
+    $command = Get-CmdInvocationString -Executable $npmExecutable -Arguments $effectiveArguments
     # Wrap the entire command so cmd.exe handles paths that contain spaces.
     $wrappedCommand = '"' + $command + '"'
     $cmdArgs = @("/d", "/s", "/c", $wrappedCommand)
@@ -68,7 +76,15 @@ function Start-NpmProcess {
         [string[]]$Arguments
     )
 
-    $command = Get-CmdInvocationString -Executable $npmCmd -Arguments $Arguments
+    $effectiveArguments = @()
+    if ($npmBootstrapArgs) {
+        $effectiveArguments += $npmBootstrapArgs
+    }
+    if ($Arguments) {
+        $effectiveArguments += $Arguments
+    }
+
+    $command = Get-CmdInvocationString -Executable $npmExecutable -Arguments $effectiveArguments
     # Wrap the entire command so cmd.exe handles paths that contain spaces.
     $wrappedCommand = '"' + $command + '"'
     $cmdArgs = @("/d", "/s", "/c", $wrappedCommand)
@@ -282,14 +298,31 @@ function Start-App {
 
 $nodeExe = Ensure-NodePortable -Destination (Join-Path $CURRENT_DIR "node-portable")
 $nodeBin = Split-Path $nodeExe
-$npmCmd = Join-Path $nodeBin "npm.cmd"
 
-if (!(Test-Path $npmCmd)) {
-    Write-ErrorAndExit "npm.cmd not found alongside Node.js."
+$npmExecutable = $null
+$npmBootstrapArgs = @()
+$npmSource = $null
+
+$npmCmd = Join-Path $nodeBin "npm.cmd"
+$npmCliJs = Join-Path $nodeBin "node_modules\npm\bin\npm-cli.js"
+
+if (Test-Path $npmCmd) {
+    $npmExecutable = $npmCmd
+    $npmBootstrapArgs = @()
+    $npmSource = $npmCmd
+} elseif (Test-Path $npmCliJs) {
+    $npmExecutable = $nodeExe
+    $npmBootstrapArgs = @($npmCliJs)
+    $npmSource = $npmCliJs
+} else {
+    Write-ErrorAndExit "Unable to locate npm alongside Node.js."
 }
 
 Write-Step "Using Node.js located at $nodeBin"
 & $nodeExe -v
+if ($npmSource) {
+    Write-Step "Using npm located at $npmSource"
+}
 Invoke-Npm -Arguments @("-v")
 
 Ensure-Dependencies
