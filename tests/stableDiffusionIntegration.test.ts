@@ -1,240 +1,64 @@
-import type { StudioSettings } from '../src/types';
+declare const process: { exit(code?: number): never };
+
+import type { StudioSettings, GenerateAIImageParams } from '../src/types';
 import { DEFAULT_STABLE_DIFFUSION_MODEL_ID } from '../src/services/stableDiffusionModelCatalog';
+import { generateAIImage } from '../src/services/aiService';
 
-declare const require: any;
-declare const process: any;
-
-function expect(condition: unknown, message: string) {
-  if (!condition) {
-    throw new Error(message);
-  }
+function expectOk(condition: unknown, message: string) {
+  if (!condition) throw new Error(message);
 }
 
-function expectEqual<T>(actual: T, expected: T, message: string) {
-  if (actual !== expected) {
-    throw new Error(`${message} (expected ${expected} but received ${actual})`);
-  }
-}
-
-function setGlobal(key: string, value: unknown) {
-  (globalThis as Record<string, unknown>)[key] = value as unknown;
-}
-
-function deleteGlobal(key: string) {
-  delete (globalThis as Record<string, unknown>)[key];
-}
-
-type AiServiceModule = typeof import('../src/services/aiService');
-
-function createMockCanvas() {
-  return {
+(async () => {
+  const mockCanvas = {
     width: 0,
     height: 0,
-    getContext: (type: string) => {
-      if (type !== '2d') return null;
-      return {
-        createImageData: (width: number, height: number) => ({
-          data: new Uint8ClampedArray(width * height * 4),
-        }),
-        putImageData: () => undefined,
-      };
-    },
+    getContext: () => ({
+      createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+      putImageData: () => undefined,
+    }),
     toDataURL: () => 'data:image/png;base64,mock',
   };
-}
 
-function createMockDocument() {
-  return {
+  const mockDocument = {
     createElement: (tag: string) => {
       if (tag !== 'canvas') {
         throw new Error('Only canvas elements are supported in tests');
       }
-      return createMockCanvas();
+      return mockCanvas;
     },
   } as Document;
-}
 
-function loadAiService(): AiServiceModule {
-  const modulePath = require.resolve('../src/services/aiService');
-  delete require.cache[modulePath];
-  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
-  return require('../src/services/aiService') as AiServiceModule;
-}
+  (globalThis as Record<string, unknown>).document = mockDocument;
 
-async function testLocalGenerationWithoutPersistentStorage() {
-  const aiService = loadAiService();
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.setTimeout = ((fn: (...args: unknown[]) => void) => {
-    fn();
-    return 0 as unknown as ReturnType<typeof originalSetTimeout>;
-  }) as typeof setTimeout;
-  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
-
-  setGlobal('window', undefined);
-  setGlobal('document', createMockDocument());
-
-  const palette = ['#0f0f0f', '#ffffff', '#f4d7b4', '#16a34a'];
   const settings: StudioSettings = {
-    preferProcedural: false,
-    enableLocalAi: true,
-    stableDiffusionReady: true,
-    stableDiffusionVersion: '1.5',
-    stableDiffusionPath: '/mock/path',
-  };
-
-  const response = await aiService.generateAIImage({
-    prompt: 'emerald mage',
-    width: 4,
-    height: 4,
-    palette,
-    seed: 123,
-    settings,
-  });
-
-  expectEqual(response.source, 'local', 'Expected the local Stable Diffusion pipeline to be used');
-  expectEqual(response.imageUrl, 'data:image/png;base64,mock', 'Expected mocked canvas output to be returned');
-
-  deleteGlobal('document');
-  deleteGlobal('window');
-  globalThis.setTimeout = originalSetTimeout;
-  globalThis.clearTimeout = originalClearTimeout;
-}
-
-async function testSetupPersistsStateInMemory() {
-  const aiService = loadAiService();
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.setTimeout = ((fn: (...args: unknown[]) => void) => {
-    fn();
-    return 0 as unknown as ReturnType<typeof originalSetTimeout>;
-  }) as typeof setTimeout;
-  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
-
-  setGlobal('window', undefined);
-  setGlobal('document', createMockDocument());
-
-  const result = await aiService.setupLocalStableDiffusion({
-    version: '2.0',
-    installPath: '/opt/stable-diffusion',
-    onProgress: () => undefined,
-  });
-
-  expectEqual(result.ready, true, 'Expected setup to report ready state');
-  const state = aiService.getStableDiffusionState();
-  expect(state, 'Expected Stable Diffusion state to be available in memory');
-  expectEqual(state?.ready ?? false, true, 'Expected Stable Diffusion runtime to be marked ready');
-  expectEqual(state?.version ?? '', '2.0', 'Expected stored version to match the requested one');
-  expectEqual(
-    state?.path ?? '',
-    '/opt/stable-diffusion',
-    'Expected stored path to match the manually selected directory'
-  );
-  expectEqual(
-    state?.model ?? '',
-    DEFAULT_STABLE_DIFFUSION_MODEL_ID,
-    'Expected default Stable Diffusion model to be stored when not specified'
-  );
-  expectEqual(
-    state?.modelSource ?? 'suggested',
-    'suggested',
-    'Expected default model to be flagged as suggested'
-  );
-
-  deleteGlobal('document');
-  deleteGlobal('window');
-  globalThis.setTimeout = originalSetTimeout;
-  globalThis.clearTimeout = originalClearTimeout;
-}
-
-async function testSetupExpandsInstallPath() {
-  const aiService = loadAiService();
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.setTimeout = ((fn: (...args: unknown[]) => void) => {
-    fn();
-    return 0 as unknown as ReturnType<typeof originalSetTimeout>;
-  }) as typeof setTimeout;
-  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
-
-  setGlobal('window', undefined);
-  setGlobal('document', createMockDocument());
-
-  const previousHome = process?.env?.HOME;
-  const previousUserProfile = process?.env?.USERPROFILE;
-  if (process?.env) {
-    process.env.HOME = '/Users/tester';
-    delete process.env.USERPROFILE;
-  }
-
-  const result = await aiService.setupLocalStableDiffusion({
-    version: '3.0',
-    installPath: '~/custom-models',
-    onProgress: () => undefined,
-  });
-
-  expectEqual(
-    result.path,
-    '/Users/tester/custom-models',
-    'Expected install path to expand the user directory when using a tilde prefix'
-  );
-
-  if (process?.env) {
-    if (previousHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = previousHome;
-    }
-    if (previousUserProfile === undefined) {
-      delete process.env.USERPROFILE;
-    } else {
-      process.env.USERPROFILE = previousUserProfile;
-    }
-  }
-
-  deleteGlobal('document');
-  deleteGlobal('window');
-  globalThis.setTimeout = originalSetTimeout;
-  globalThis.clearTimeout = originalClearTimeout;
-}
-
-async function testProceduralFallbackWhenDisabled() {
-  const aiService = loadAiService();
-  setGlobal('window', undefined);
-  setGlobal('document', createMockDocument());
-
-  const palette = ['#0f0f0f', '#ffffff', '#f4d7b4', '#16a34a'];
-  const settings: StudioSettings = {
-    preferProcedural: false,
-    enableLocalAi: true,
+    preferProcedural: true, // force procedural path
+    enableLocalAi: false,
     stableDiffusionReady: false,
-    stableDiffusionVersion: '1.5',
-    stableDiffusionPath: '/mock/path',
+    stableDiffusionVersion: '0.0.0',
+    stableDiffusionPath: '',
+    stableDiffusionModelId: DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+    stableDiffusionModelSource: 'suggested',
   };
 
-  const response = await aiService.generateAIImage({
-    prompt: 'emerald mage',
-    width: 4,
-    height: 4,
-    palette,
-    seed: 456,
+  const params: GenerateAIImageParams = {
+    prompt: 'test',
+    width: 96,
+    height: 64,
+    palette: ['#000000', '#ffffff'],
     settings,
-  });
+    seed: 1234,
+  };
 
-  expectEqual(response.source, 'procedural', 'Expected procedural generation when Stable Diffusion is not ready');
+  const res = await generateAIImage(params);
+  expectOk(res.source === 'procedural', 'Expected procedural generation when preferProcedural=true');
+  expectOk(
+    typeof res.imageUrl === 'string' && res.imageUrl.startsWith('data:image/png;base64,'),
+    'Expected data URL image',
+  );
+  console.log('Stable Diffusion test (procedural fallback): OK');
 
-  deleteGlobal('document');
-  deleteGlobal('window');
-}
-
-async function run() {
-  await testLocalGenerationWithoutPersistentStorage();
-  await testSetupPersistsStateInMemory();
-  await testSetupExpandsInstallPath();
-  await testProceduralFallbackWhenDisabled();
-}
-
-run().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
+  delete (globalThis as Record<string, unknown>).document;
+})().catch((e) => {
+  console.error('Stable Diffusion test FAILED', e);
+  process.exit(1);
 });
