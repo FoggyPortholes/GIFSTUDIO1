@@ -49,17 +49,29 @@ function AppShell() {
         <div className="version">Studio Core v2.0</div>
       </header>
       <div className="app-body">
-        <nav className="side-nav">
-          {NAVIGATION.map((item) => (
-            <button
-              key={item.key}
-              className={item.key === activeView ? 'active' : ''}
-              onClick={() => setActiveView(item.key)}
-            >
-              <span className="nav-label">{item.label}</span>
-              <span className="nav-description">{item.description}</span>
-            </button>
-          ))}
+        <nav className="side-nav" aria-label="Studio sections">
+          <ul className="side-nav__list">
+            {NAVIGATION.map((item) => {
+              const isActive = item.key === activeView;
+              const descriptionId = `nav-${item.key}-description`;
+              return (
+                <li key={item.key} className="side-nav__item">
+                  <button
+                    type="button"
+                    className={isActive ? 'active' : ''}
+                    aria-current={isActive ? 'page' : undefined}
+                    aria-describedby={descriptionId}
+                    onClick={() => setActiveView(item.key)}
+                  >
+                    <span className="nav-label">{item.label}</span>
+                    <span id={descriptionId} className="nav-description">
+                      {item.description}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </nav>
         <main className="workspace">
           <ViewRenderer active={activeView} />
