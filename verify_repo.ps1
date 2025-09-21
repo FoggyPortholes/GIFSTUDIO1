@@ -11,12 +11,7 @@ $requiredFiles = @(
     "index.html"
 )
 
-$requiredDirs = @(
-    "src",
-    "public",
-    "logs",
-    "node-portable"
-)
+$requiredDirs = @("src","public","logs","node-portable")
 
 # Check required files
 Write-Host "`n-- Files --"
@@ -29,12 +24,13 @@ foreach ($f in $requiredFiles) {
 }
 
 # Check required directories
-Write-Host "`n-- Directories --"
+Write-Host "`n-- Dirs --"
 foreach ($d in $requiredDirs) {
     if (Test-Path $d) {
         Write-Host "✔ Found $d"
     } else {
-        Write-Host "✖ Missing $d"
+        Write-Host "✖ Missing $d (creating)"
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
     }
 }
 

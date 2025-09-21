@@ -12,59 +12,67 @@ const WIDTH = 96;
 const HEIGHT = 64;
 const DELAY = 300;
 
-function makeGradientRGBA() {
+function makeGradientRGBA(startHex = '#ff0000', endHex = '#0000ff') {
+  const start = hexToRgb(startHex);
+  const end = hexToRgb(endHex);
   const data = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
   for (let y = 0; y < HEIGHT; y++) {
     for (let x = 0; x < WIDTH; x++) {
+      const t = x / (WIDTH - 1);
       const i = (y * WIDTH + x) * 4;
-      data[i + 0] = Math.round((x / (WIDTH - 1)) * 255);
-      data[i + 1] = Math.round((y / (HEIGHT - 1)) * 255);
-      data[i + 2] = Math.round(((x + y) / (WIDTH + HEIGHT - 2)) * 255);
+      data[i + 0] = lerp(start.r, end.r, t);
+      data[i + 1] = lerp(start.g, end.g, t);
+      data[i + 2] = lerp(start.b, end.b, t);
       data[i + 3] = 255;
     }
   }
   return data;
 }
 
-function makeCheckerRGBA() {
-  const data = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
-  for (let y = 0; y < HEIGHT; y++) {
-    for (let x = 0; x < WIDTH; x++) {
-      const i = (y * WIDTH + x) * 4;
-      const block = ((x >> 3) & 1) ^ ((y >> 3) & 1) ? 255 : 32;
-      data[i + 0] = block;
-      data[i + 1] = 32;
-      data[i + 2] = 255 - block;
-      data[i + 3] = 255;
-    }
-  }
-  return data;
+function hexToRgb(hex) {
+  const v = hex.replace('#', '');
+  const n = Number.parseInt(v.length === 3 ? v.split('').map((c) => c + c).join('') : v, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
-async function main() {
-  const enc = GIFEncoder();
-  const { writeFrame, finish } = enc;
-  const frames = [makeGradientRGBA(), makeCheckerRGBA()];
+const lerp = (a, b, t) => Math.round(a + (b - a) * t);
 
+function validateGif(bytes) {
+  const header = String.fromCharCode(...bytes.slice(0, 6));
+  const trailer = bytes[bytes.length - 1];
+  return (header === 'GIF87a' || header === 'GIF89a') && trailer === 0x3b;
+}
+
+function encode() {
+  const encoder = GIFEncoder();
+  const frames = [
+    makeGradientRGBA('#ff0040', '#4000ff'),
+    makeGradientRGBA('#40ff40', '#0040ff'),
+    makeGradientRGBA('#ffbf00', '#00bfff'),
+  ];
   frames.forEach((rgba, idx) => {
     const palette = quantize(rgba, 256);
     const index = applyPalette(rgba, palette);
-    const options = idx === 0 ? { palette, delay: DELAY, repeat: 0 } : { palette, delay: DELAY };
-    writeFrame(index, WIDTH, HEIGHT, options);
+    encoder.writeFrame(index, WIDTH, HEIGHT, {
+      delay: DELAY,
+      palette,
+      ...(idx === 0 ? { repeat: 0 } : {}),
+    });
   });
-
-  const buffer = finish();
-  const bytes = new Uint8Array(buffer);
-  const outDir = path.join(__dirname, '..', 'public');
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
+  encoder.finish();
+  const bytes = new Uint8Array(encoder.bytesView());
+  if (!validateGif(bytes)) {
+    throw new Error('Invalid GIF bytes (header/trailer check failed).');
   }
-  const outPath = path.join(outDir, 'animation.gif');
-  fs.writeFileSync(outPath, Buffer.from(bytes));
-  console.log('✔ GIF written to', outPath);
+  const outDir = path.join(__dirname, '..', 'public');
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, 'animation.gif'), bytes);
 }
 
-main().catch((err) => {
-  console.error('✖ GIF encoding failed:', err);
+try {
+  encode();
+  console.log('GIF smoke test: OK → public/animation.gif');
+} catch (err) {
+  console.error('GIF smoke test FAILED:', err?.message || err);
   process.exit(1);
-});
+}

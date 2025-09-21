@@ -146,7 +146,8 @@ export default function App() {
     pushLog('Starting red → blue gradient encode…');
     try {
       const bytes = encodeTestFrames();
-      const blob = new Blob([bytes], { type: 'image/gif' });
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      const blob = new Blob([buffer], { type: 'image/gif' });
       const url = URL.createObjectURL(blob);
 
       setLastGif((current) => {
@@ -289,8 +290,8 @@ export default function App() {
                   <input
                     type="file"
                     accept="image/gif"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
+                    onChange={(event: Event & { target: HTMLInputElement }) => {
+                      const file = event.target.files?.[0] ?? null;
                       if (file) {
                         void validateFromFile(file);
                         event.target.value = '';

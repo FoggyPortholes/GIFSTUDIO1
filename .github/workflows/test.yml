@@ -18,6 +18,10 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Typecheck
+        run: npx tsc -p tsconfig.json --noEmit
+      - name: Lint
+        run: npm run lint
       - name: Build
         run: npm run build
       - name: Run GIF smoke test

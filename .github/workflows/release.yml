@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 jobs:
-  test:
+  build-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,30 +21,22 @@ jobs:
         run: npm run build
       - name: Run GIF smoke test
         run: npm run test:gif
-
-  release:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm install
-      - name: Build
-        run: npm run build
       - name: Package artifact
         run: |
           mkdir -p dist
-          zip -r "dist/gif_studio-${GITHUB_REF_NAME}.zip" . \
+          zip -r "dist/gif_studio-${{ github.ref_name }}.zip" . \
             -x "node_modules/*" \
             -x ".git/*" \
             -x "logs/*" \
             -x "dist/*"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gif_studio-${{ github.ref_name }}
+          path: dist/gif_studio-${{ github.ref_name }}.zip
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/gif_studio-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

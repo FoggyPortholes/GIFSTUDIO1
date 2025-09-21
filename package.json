@@ -7,7 +7,10 @@
     "build": "vite build",
     "serve": "vite preview",
     "test:gif": "node tests/encode_node.mjs",
-    "test:ai": "tsc -p tsconfig.test.json && node build-tests/tests/stableDiffusionIntegration.test.js"
+    "test:ai": "tsc -p tsconfig.test.json && node build-tests/tests/stableDiffusionIntegration.test.js",
+    "lint": "eslint . --ext .ts,.tsx,.mjs",
+    "format": "prettier -w .",
+    "verify": "node -e \"try{require('fs').accessSync('public/animation.gif')}catch(e){process.exit(1)}\" && echo OK"
   },
   "dependencies": {
     "gifenc": "^1.0.2",
@@ -16,7 +19,13 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.0.0",
-    "vite": "^6.0.0"
+    "typescript": "^5.5.4",
+    "vite": "^6.0.0",
+    "eslint": "^9.11.1",
+    "@typescript-eslint/parser": "^8.8.1",
+    "@typescript-eslint/eslint-plugin": "^8.8.1",
+    "prettier": "^3.3.3",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
   }
 }
