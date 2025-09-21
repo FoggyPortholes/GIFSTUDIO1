@@ -1,22 +1,6 @@
-diff --git a/.gitignore b/.gitignore
-new file mode 100644
-index 0000000..1111111
---- /dev/null
-+++ b/.gitignore
-@@
-+logs/
-+*.log
-+node_modules/
-+dist/
-+.vite/
-+public/animation.gif
-+.DS_Store
-+Thumbs.db
-+.vscode/
-+.idea/
 diff --git a/scripts/launch.ps1 b/scripts/launch.ps1
 new file mode 100644
-index 0000000..2222222
+index 0000000..1111111
 --- /dev/null
 +++ b/scripts/launch.ps1
 @@
@@ -32,14 +16,14 @@ index 0000000..2222222
 +}
 +
 +Write-Log "[+] Checking Node portable..."
-+$nodeExe = Get-ChildItem "$here\..\node-portable\node-v*\win-x64\node.exe" -Recurse |
-+           Select-Object -First 1
++$nodeExe = (Get-ChildItem "$here\..\node-portable\node-v*\win-x64\node.exe" -Recurse |
++            Select-Object -First 1 -ExpandProperty FullName)
 +
 +if (-not $nodeExe) {
 +  throw "Node portable not found under node-portable folder."
 +}
 +
-+$nodeDir = Split-Path $nodeExe.FullName
++$nodeDir = Split-Path $nodeExe
 +$npmCmd  = Join-Path $nodeDir "npm.cmd"
 +
 +if (-not (Test-Path $npmCmd)) {
@@ -48,5 +32,5 @@ index 0000000..2222222
 +  if (-not $npmCmd) { throw "No npm found (portable or system)" }
 +}
 +
-+Write-Log "[+] Node:  $(& $nodeExe.FullName --version)"
++Write-Log "[+] Node:  $(& $nodeExe --version)"
 +Write-Log "[+] npm:   $(& $npmCmd --version)"
