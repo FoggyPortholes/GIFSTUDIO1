@@ -1,0 +1,54 @@
+From 1a2b3c4d5e6f7g8h9i Mon Sep 21 00:00:00 2025
+Subject: cleanup: streamline GIFSTUDIO1 repo, consolidate launchers, add CI,
+ tests, lint/format
+
+---
+ .github/workflows/ci.yml         | 35 ++++++++++++++++++
+ .gitignore                       | 11 ++++++
+ package.json                     | 12 ++++++-
+ scripts/launch.bat               |  6 +++
+ scripts/launch.ps1               | 62 ++++++++++++++++++++++++++++++++
+ tests/gif.spec.ts                | 14 +++++++
+ tests/synth-gif-runner.cjs       | 23 ++++++++++++
+ 7 files changed, 162 insertions(+), 1 deletion(-)
+ create mode 100644 .github/workflows/ci.yml
+ create mode 100644 .gitignore
+ create mode 100644 scripts/launch.bat
+ create mode 100644 scripts/launch.ps1
+ create mode 100644 tests/gif.spec.ts
+ create mode 100644 tests/synth-gif-runner.cjs
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@
++name: CI
++on: [push, pull_request]
++
++jobs:
++  lint-typecheck:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with: { node-version: '20' }
++      - run: npm ci
++      - run: npm run lint
++      - run: npm run typecheck
++
++  build-and-simulate-windows:
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with: { node-version: '20' }
++      - run: npm ci
++      - run: npm run build
++      - run: npm run test:gif
++      - uses: actions/upload-artifact@v4
++        with:
++          name: animation-gif
++          path: public/animation.gif
+diff --git
