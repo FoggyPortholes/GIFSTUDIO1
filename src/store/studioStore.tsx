@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { createBlankAnimationFrame, createDerivedFrame, createId, createNormalizedCharacter } from '../utils/characterTemplate';
 import { blankPixels } from '../utils/frame';
+import { DEFAULT_STABLE_DIFFUSION_MODEL_ID } from '../services/stableDiffusionModelCatalog';
+import type {
+  BrushMode,
+  CharacterModel,
+  Frame,
+  Layer,
+  MirrorMode,
+  OnionSkinSettings,
+  PixelColor,
+  StudioSettings,
+  StudioState,
+} from '../types';
 
 export const STORAGE_KEY = 'pixel-persona-studio-state-v1';
 
