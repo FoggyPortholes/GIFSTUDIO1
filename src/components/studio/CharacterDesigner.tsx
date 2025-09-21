@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useStudioStore, useActiveCharacter, useActiveFrame } from '../../store/studioStore';
 import { composeFrame, pixelIndex } from '../../utils/frame';
 
@@ -164,6 +164,7 @@ export function CharacterDesigner() {
   );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const canvasInstructionsId = useId();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -238,9 +239,16 @@ export function CharacterDesigner() {
   return (
     <div className="designer">
       <div className="canvas-wrapper">
+        <p id={canvasInstructionsId} className="sr-only">
+          Pixel canvas for editing {character.name}. Drag to paint with the current brush color or toggle eyedrop mode to sample
+          colors. Use right-click on palette swatches to remove them.
+        </p>
         <canvas
           ref={canvasRef}
           className="pixel-canvas"
+          role="img"
+          aria-label={`${character.name} pixel canvas`}
+          aria-describedby={canvasInstructionsId}
           onPointerDown={(event) => {
             setIsDrawing(true);
             (event.target as HTMLCanvasElement).setPointerCapture(event.pointerId);
@@ -253,6 +261,9 @@ export function CharacterDesigner() {
           onPointerUp={(event) => {
             setIsDrawing(false);
             (event.target as HTMLCanvasElement).releasePointerCapture(event.pointerId);
+          }}
+          onPointerLeave={() => {
+            setIsDrawing(false);
           }}
         />
       </div>
