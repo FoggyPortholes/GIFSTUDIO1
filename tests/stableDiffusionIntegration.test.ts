@@ -1,4 +1,5 @@
 import type { StudioSettings } from '../src/types';
+import { DEFAULT_STABLE_DIFFUSION_MODEL_ID } from '../src/services/stableDiffusionModelCatalog';
 
 declare const require: any;
 declare const process: any;
@@ -125,6 +126,16 @@ async function testSetupPersistsStateInMemory() {
   expect(state, 'Expected Stable Diffusion state to be available in memory');
   expectEqual(state?.ready ?? false, true, 'Expected Stable Diffusion runtime to be marked ready');
   expectEqual(state?.version ?? '', '2.0', 'Expected stored version to match the requested one');
+  expectEqual(
+    state?.model ?? '',
+    DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+    'Expected default Stable Diffusion model to be stored when not specified'
+  );
+  expectEqual(
+    state?.modelSource ?? 'suggested',
+    'suggested',
+    'Expected default model to be flagged as suggested'
+  );
 
   deleteGlobal('document');
   deleteGlobal('window');

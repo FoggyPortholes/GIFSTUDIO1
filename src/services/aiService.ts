@@ -2,6 +2,12 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { PixelColor, StudioSettings } from '../types';
 import { createNormalizedCharacter } from '../utils/characterTemplate';
 import { hexToRgba, adjustHexLightness, blendHexColors } from '../utils/color';
+import {
+  DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+  StableDiffusionModelSource,
+  getModelStyleTuning,
+  getModelSuggestionById,
+} from './stableDiffusionModelCatalog';
 
 interface AIRequest {
   prompt: string;
@@ -39,6 +45,8 @@ export interface StableDiffusionSetupResult {
   version: string;
   path: string;
   logs: string[];
+  model?: string;
+  modelSource?: StableDiffusionModelSource;
 }
 
 export interface StableDiffusionSetupOptions {
@@ -46,6 +54,8 @@ export interface StableDiffusionSetupOptions {
   installPath?: string;
   autoDownload: boolean;
   onProgress?: (progress: StableDiffusionSetupProgress) => void;
+  preferredModel?: string;
+  modelSource?: StableDiffusionModelSource;
 }
 
 export interface StableDiffusionState extends StableDiffusionSetupResult {
@@ -117,22 +127,58 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
 
   const path = options.installPath ?? `~/stable-diffusion/${options.version}`;
   const existing = loadStableDiffusionState();
+  const trimmedModel = options.preferredModel?.trim();
+  const normalizedModel = trimmedModel && trimmedModel.length > 0 ? trimmedModel : undefined;
+  const preferredSuggestion = getModelSuggestionById(normalizedModel);
+  const fallbackModel = existing?.model ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID;
+  const resolvedModel = normalizedModel ?? fallbackModel;
+  const resolvedSuggestion = getModelSuggestionById(resolvedModel);
+  const resolvedSource: StableDiffusionModelSource = normalizedModel
+    ? options.modelSource ?? (preferredSuggestion ? 'suggested' : 'custom')
+    : existing?.modelSource ?? (resolvedSuggestion ? 'suggested' : 'custom');
 
   report('checking', 5, 'Validating existing Stable Diffusion installation...');
   await delay(150);
 
+  if (normalizedModel) {
+    const friendly = preferredSuggestion?.name ?? normalizedModel;
+    report('checking', 12, `Configuring model preference "${friendly}"...`);
+  } else if (existing?.model) {
+    const friendly = getModelSuggestionById(existing.model)?.name ?? existing.model;
+    report('checking', 12, `Reusing stored model "${friendly}".`);
+  } else {
+    const friendly = resolvedSuggestion?.name ?? resolvedModel;
+    report('checking', 12, `Using recommended model "${friendly}".`);
+  }
+
   if (existing?.ready && existing.version === options.version && existing.path === path) {
-    report('ready', 100, 'Stable Diffusion already configured locally.');
-    return {
-      ready: true,
-      version: existing.version,
-      path: existing.path,
+    const friendly = resolvedSuggestion?.name ?? resolvedModel;
+    report('ready', 100, `Stable Diffusion already configured locally with ${friendly}.`);
+    const state: StableDiffusionState = {
+      ...existing,
+      model: resolvedModel,
+      modelSource: resolvedSource,
+      lastUpdated: Date.now(),
       logs,
+    };
+    persistStableDiffusionState(state);
+    return {
+      ready: state.ready,
+      version: state.version,
+      path: state.path,
+      logs,
+      model: state.model,
+      modelSource: state.modelSource,
     };
   }
 
   if (!options.autoDownload) {
-    report('ready', 100, 'Manual installation marked as ready. Provide your own runtime at the specified path.');
+    const friendly = resolvedSuggestion?.name ?? resolvedModel;
+    report(
+      'ready',
+      100,
+      `Manual installation marked as ready. Provide your own runtime for ${friendly} at the specified path.`
+    );
     const state: StableDiffusionState = {
       ready: true,
       version: options.version,
@@ -140,9 +186,18 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       autoDownload: options.autoDownload,
       lastUpdated: Date.now(),
       logs,
+      model: resolvedModel,
+      modelSource: resolvedSource,
     };
     persistStableDiffusionState(state);
-    return { ready: state.ready, version: state.version, path: state.path, logs };
+    return {
+      ready: state.ready,
+      version: state.version,
+      path: state.path,
+      logs,
+      model: state.model,
+      modelSource: state.modelSource,
+    };
   }
 
   try {
@@ -152,7 +207,8 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
     await delay(650);
     report('installing', 85, 'Installing Python dependencies and optimizers...');
     await delay(720);
-    report('ready', 100, 'Stable Diffusion runtime prepared locally.');
+    const friendly = resolvedSuggestion?.name ?? resolvedModel;
+    report('ready', 100, `Stable Diffusion runtime prepared locally with ${friendly}.`);
 
     const state: StableDiffusionState = {
       ready: true,
@@ -161,12 +217,22 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       autoDownload: options.autoDownload,
       lastUpdated: Date.now(),
       logs,
+      model: resolvedModel,
+      modelSource: resolvedSource,
     };
     persistStableDiffusionState(state);
-    return { ready: state.ready, version: state.version, path: state.path, logs };
+    return {
+      ready: state.ready,
+      version: state.version,
+      path: state.path,
+      logs,
+      model: state.model,
+      modelSource: state.modelSource,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    report('ready', 100, `Setup failed: ${message}`);
+    const friendly = resolvedSuggestion?.name ?? resolvedModel;
+    report('ready', 100, `Setup failed for ${friendly}: ${message}`);
     const state: StableDiffusionState = {
       ready: false,
       version: options.version,
@@ -174,9 +240,18 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       autoDownload: options.autoDownload,
       lastUpdated: Date.now(),
       logs,
+      model: resolvedModel,
+      modelSource: resolvedSource,
     };
     persistStableDiffusionState(state);
-    return { ready: false, version: options.version, path, logs };
+    return {
+      ready: false,
+      version: options.version,
+      path,
+      logs,
+      model: state.model,
+      modelSource: state.modelSource,
+    };
   }
 }
 
@@ -228,6 +303,10 @@ const DITHER_MATRIX = [
   [15, 7, 13, 5],
 ];
 
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
 function mixWithDither(baseColor: string, targetColor: string, intensity: number, x: number, y: number) {
   if (intensity <= 0) return baseColor;
   const clamped = Math.max(0, Math.min(1, intensity));
@@ -246,10 +325,32 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
   const seedValue = hashPrompt(`${prompt}|${variant}`, request.seed);
   const random = randomGenerator(seedValue);
 
-  const accent = deriveAccent(prompt, palette, random);
-  const paletteAccent = palette.find((color, index) => index >= 3) ?? adjustHexLightness(accent, -0.1);
-  const clothPrimary = emphasis === 'local' ? blendHexColors(accent, '#ffffff', 0.18) : accent;
-  const clothSecondary = blendHexColors(paletteAccent, clothPrimary, 0.5);
+  const tuning = emphasis === 'local' ? getModelStyleTuning(request.settings.stableDiffusionModel) : undefined;
+  const highlightBoost = tuning?.highlightBoost ?? 0;
+  const shadowBoost = tuning?.shadowDepth ?? 0;
+  const saturationShift = tuning?.saturationShift ?? 0;
+  const capeBias = tuning?.capeBias ?? 0;
+  const detailBias = tuning?.detailBias ?? 0;
+
+  let accent = deriveAccent(prompt, palette, random);
+  if (emphasis === 'local' && saturationShift !== 0) {
+    const tint = saturationShift > 0 ? '#5eead4' : '#111827';
+    accent = blendHexColors(accent, tint, Math.min(0.35, Math.abs(saturationShift)));
+  }
+
+  const paletteAccentBase = palette.find((color, index) => index >= 3) ?? adjustHexLightness(accent, -0.1);
+  const paletteAccent =
+    emphasis === 'local' && saturationShift !== 0
+      ? blendHexColors(
+          paletteAccentBase,
+          saturationShift > 0 ? '#22d3ee' : '#0f172a',
+          Math.min(0.25, Math.abs(saturationShift))
+        )
+      : paletteAccentBase;
+  const clothPrimary =
+    emphasis === 'local' ? blendHexColors(accent, '#ffffff', 0.18 + highlightBoost) : accent;
+  const secondaryMix = clamp01(0.5 - (emphasis === 'local' ? saturationShift * 0.25 : 0));
+  const clothSecondary = blendHexColors(paletteAccent, clothPrimary, secondaryMix);
   const trim = blendHexColors(clothPrimary, '#f1f5f9', 0.35);
   const outlineColor = palette.find((color) => color.toLowerCase() === '#0f0f0f') ?? '#0f172a';
   const skinTone = palette[2] ?? blendHexColors('#f4d7b4', clothSecondary, 0.2);
@@ -258,13 +359,14 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
   const bootColor = palette[5] ?? blendHexColors(clothSecondary, '#1f2937', 0.6);
   const bootHighlight = adjustHexLightness(bootColor, 0.18);
   const bootShadow = adjustHexLightness(bootColor, -0.25);
-  const highlight = adjustHexLightness(clothPrimary, 0.25);
+  const highlight = adjustHexLightness(clothPrimary, 0.25 + (emphasis === 'local' ? highlightBoost * 0.9 : 0));
   const midTone = blendHexColors(clothPrimary, clothSecondary, 0.5);
-  const shadow = adjustHexLightness(clothPrimary, -0.35);
-  const deepShadow = adjustHexLightness(clothSecondary, -0.45);
-  const capeColor = blendHexColors(clothSecondary, '#0f172a', 0.35);
-  const capeShadow = adjustHexLightness(capeColor, -0.25);
-  const hairColor = blendHexColors(accent, '#1f2937', 0.55);
+  const shadow = adjustHexLightness(clothPrimary, -0.35 - (emphasis === 'local' ? shadowBoost : 0));
+  const deepShadow = adjustHexLightness(clothSecondary, -0.45 - (emphasis === 'local' ? shadowBoost * 1.15 : 0));
+  const capeBlend = clamp01(0.35 - (emphasis === 'local' ? saturationShift * 0.1 : 0));
+  const capeColor = blendHexColors(clothSecondary, '#0f172a', capeBlend);
+  const capeShadow = adjustHexLightness(capeColor, -0.25 - (emphasis === 'local' ? shadowBoost * 0.5 : 0));
+  const hairColor = blendHexColors(accent, '#1f2937', 0.55 - (emphasis === 'local' ? saturationShift * 0.15 : 0));
   const hairHighlight = adjustHexLightness(hairColor, 0.22);
   const hairShadow = adjustHexLightness(hairColor, -0.3);
   const gloveColor = blendHexColors(clothSecondary, '#0f172a', 0.4);
@@ -290,12 +392,12 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
   const legGap = Math.max(1, Math.floor(width * 0.05));
   const leftLegStart = Math.max(1, center - legGap - legWidth);
   const rightLegStart = Math.min(width - legWidth - 1, center + legGap + 1);
-  const capeEnabled = emphasis === 'local' && random() > 0.4;
-  const platedTorso = emphasis === 'local' && random() > 0.45;
-  const strapEnabled = random() > 0.6;
-  const pauldronEnabled = emphasis === 'local' && random() > 0.55;
-  const hemPattern = random() > 0.5;
-  const bootTrim = random() > 0.5;
+  const capeEnabled = emphasis === 'local' && random() > clamp01(0.4 - capeBias);
+  const platedTorso = emphasis === 'local' && random() > clamp01(0.45 - detailBias * 0.5);
+  const strapEnabled = random() > clamp01(0.6 - detailBias);
+  const pauldronEnabled = emphasis === 'local' && random() > clamp01(0.55 - detailBias * 0.4);
+  const hemPattern = random() > clamp01(0.5 - detailBias * 0.5);
+  const bootTrim = random() > clamp01(0.5 - detailBias * 0.3);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -541,9 +643,26 @@ async function callLocalStableDiffusion(request: AIRequest): Promise<AIImageResp
   if (state && !state.ready) {
     return null;
   }
+  const trimmedSettingModel = request.settings.stableDiffusionModel?.trim();
+  const modelPreference =
+    trimmedSettingModel && trimmedSettingModel.length > 0
+      ? trimmedSettingModel
+      : state?.model ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID;
+  const modelSource =
+    request.settings.stableDiffusionModelSource ??
+    state?.modelSource ??
+    (getModelSuggestionById(modelPreference) ? 'suggested' : 'custom');
+  const resolvedRequest: AIRequest = {
+    ...request,
+    settings: {
+      ...request.settings,
+      stableDiffusionModel: modelPreference,
+      stableDiffusionModelSource: modelSource,
+    },
+  };
   await delay(200);
-  const pixels = stylizedPixels(request, { emphasis: 'local' });
-  const imageUrl = pixelsToDataUrl(pixels, request.width, request.height);
+  const pixels = stylizedPixels(resolvedRequest, { emphasis: 'local' });
+  const imageUrl = pixelsToDataUrl(pixels, resolvedRequest.width, resolvedRequest.height);
   return { imageUrl, pixels, source: 'local' };
 }
 
@@ -603,9 +722,26 @@ export async function generateAIImage(request: AIRequest): Promise<AIImageRespon
 export async function generateAIGif(request: AIRequest): Promise<AIGifResponse> {
   if (request.settings.enableLocalAi && request.settings.stableDiffusionReady) {
     const state = loadStableDiffusionState();
-    if (state?.ready) {
-      const frames = buildAnimationFrames(request, 'local');
-      const { gifUrl, frameUrls } = framesToGif(frames, request.width, request.height);
+    if (state?.ready || request.settings.stableDiffusionReady) {
+      const trimmedSettingModel = request.settings.stableDiffusionModel?.trim();
+      const modelPreference =
+        trimmedSettingModel && trimmedSettingModel.length > 0
+          ? trimmedSettingModel
+          : state?.model ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID;
+      const modelSource =
+        request.settings.stableDiffusionModelSource ??
+        state?.modelSource ??
+        (getModelSuggestionById(modelPreference) ? 'suggested' : 'custom');
+      const resolvedRequest: AIRequest = {
+        ...request,
+        settings: {
+          ...request.settings,
+          stableDiffusionModel: modelPreference,
+          stableDiffusionModelSource: modelSource,
+        },
+      };
+      const frames = buildAnimationFrames(resolvedRequest, 'local');
+      const { gifUrl, frameUrls } = framesToGif(frames, resolvedRequest.width, resolvedRequest.height);
       return { gifUrl, frames: frameUrls, source: 'local' };
     }
   }
