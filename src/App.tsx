@@ -41,8 +41,9 @@ function encodeTestFrames(): Uint8Array {
     });
   });
 
-  const buffer = encoder.finish();
-  return new Uint8Array(buffer);
+  encoder.finish();
+  const bytes = encoder.bytesView();
+  return new Uint8Array(bytes);
 }
 
 function createGradientFrame(startHex: string, endHex: string): Uint8ClampedArray {
