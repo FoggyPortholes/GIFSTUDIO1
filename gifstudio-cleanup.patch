@@ -1,0 +1,52 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/.gitignore
+@@
++logs/
++*.log
++node_modules/
++dist/
++.vite/
++public/animation.gif
++.DS_Store
++Thumbs.db
++.vscode/
++.idea/
+diff --git a/scripts/launch.ps1 b/scripts/launch.ps1
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/scripts/launch.ps1
+@@
++$ErrorActionPreference = "Stop"
++$here   = Split-Path -Parent $MyInvocation.MyCommand.Path
++$logDir = Join-Path $here "..\logs"
++New-Item -Force -ItemType Directory -Path $logDir | Out-Null
++$log    = Join-Path $logDir ("launch_{0:yyyyMMdd_HHmmss}.log" -f (Get-Date))
++
++function Write-Log($msg) {
++  $stamp = Get-Date -Format o
++  "$stamp $msg" | Tee-Object -FilePath $log -Append
++}
++
++Write-Log "[+] Checking Node portable..."
++$nodeExe = Get-ChildItem "$here\..\node-portable\node-v*\win-x64\node.exe" -Recurse |
++           Select-Object -First 1
++
++if (-not $nodeExe) {
++  throw "Node portable not found under node-portable folder."
++}
++
++$nodeDir = Split-Path $nodeExe.FullName
++$npmCmd  = Join-Path $nodeDir "npm.cmd"
++
++if (-not (Test-Path $npmCmd)) {
++  Write-Log "[!] npm.cmd not found next to node.exe, falling back to system npm"
++  $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue).Source
++  if (-not $npmCmd) { throw "No npm found (portable or system)" }
++}
++
++Write-Log "[+] Node:  $(& $nodeExe.FullName --version)"
++Write-Log "[+] npm:   $(& $npmCmd --version)"
