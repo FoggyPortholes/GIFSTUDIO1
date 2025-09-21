@@ -221,6 +221,25 @@ function deriveAccent(prompt: string, palette: string[], random: () => number) {
   return palette[Math.floor(random() * palette.length)] ?? '#ffffff';
 }
 
+const DITHER_MATRIX = [
+  [0, 8, 2, 10],
+  [12, 4, 14, 6],
+  [3, 11, 1, 9],
+  [15, 7, 13, 5],
+];
+
+function mixWithDither(baseColor: string, targetColor: string, intensity: number, x: number, y: number) {
+  if (intensity <= 0) return baseColor;
+  const clamped = Math.max(0, Math.min(1, intensity));
+  const threshold = DITHER_MATRIX[y & 3][x & 3] / 15;
+  let color = baseColor;
+  color = blendHexColors(color, targetColor, clamped * 0.18);
+  if (threshold <= clamped) {
+    color = blendHexColors(color, targetColor, 0.25 + clamped * 0.35);
+  }
+  return color;
+}
+
 function stylizedPixels(request: AIRequest, options: { variant?: number; emphasis?: AIImageSource } = {}): PixelColor[] {
   const { prompt, width, height, palette } = request;
   const { variant = 0, emphasis = 'procedural' } = options;
@@ -234,10 +253,23 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
   const trim = blendHexColors(clothPrimary, '#f1f5f9', 0.35);
   const outlineColor = palette.find((color) => color.toLowerCase() === '#0f0f0f') ?? '#0f172a';
   const skinTone = palette[2] ?? blendHexColors('#f4d7b4', clothSecondary, 0.2);
+  const skinHighlight = adjustHexLightness(skinTone, 0.18);
+  const skinShadow = adjustHexLightness(skinTone, -0.2);
   const bootColor = palette[5] ?? blendHexColors(clothSecondary, '#1f2937', 0.6);
+  const bootHighlight = adjustHexLightness(bootColor, 0.18);
+  const bootShadow = adjustHexLightness(bootColor, -0.25);
   const highlight = adjustHexLightness(clothPrimary, 0.25);
-  const shadow = adjustHexLightness(clothPrimary, -0.3);
+  const midTone = blendHexColors(clothPrimary, clothSecondary, 0.5);
+  const shadow = adjustHexLightness(clothPrimary, -0.35);
+  const deepShadow = adjustHexLightness(clothSecondary, -0.45);
   const capeColor = blendHexColors(clothSecondary, '#0f172a', 0.35);
+  const capeShadow = adjustHexLightness(capeColor, -0.25);
+  const hairColor = blendHexColors(accent, '#1f2937', 0.55);
+  const hairHighlight = adjustHexLightness(hairColor, 0.22);
+  const hairShadow = adjustHexLightness(hairColor, -0.3);
+  const gloveColor = blendHexColors(clothSecondary, '#0f172a', 0.4);
+  const strapColor = blendHexColors(accent, '#0f172a', 0.5);
+  const gemColor = blendHexColors(trim, accent, 0.35);
 
   const template = createNormalizedCharacter(width, height);
   const base = template.frames[0].layers[0].pixels;
@@ -246,8 +278,24 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
   const torsoBottom = Math.floor(height * 0.64);
   const beltRow = torsoBottom - 1;
   const center = Math.floor(width / 2);
-  const capeEnabled = emphasis === 'local' && random() > 0.55;
-  const platedTorso = emphasis === 'local' && random() > 0.5;
+  const torsoHalf = Math.max(3, Math.floor(width * 0.25));
+  const armWidth = Math.max(2, Math.floor(width * 0.16));
+  const torsoLeft = center - torsoHalf;
+  const torsoRight = center + torsoHalf - 1;
+  const armLeftStart = Math.max(1, torsoLeft - armWidth);
+  const armLeftEnd = torsoLeft - 1;
+  const armRightStart = torsoRight + 1;
+  const armRightEnd = Math.min(width - 2, torsoRight + armWidth);
+  const legWidth = Math.max(2, Math.floor(width * 0.18));
+  const legGap = Math.max(1, Math.floor(width * 0.05));
+  const leftLegStart = Math.max(1, center - legGap - legWidth);
+  const rightLegStart = Math.min(width - legWidth - 1, center + legGap + 1);
+  const capeEnabled = emphasis === 'local' && random() > 0.4;
+  const platedTorso = emphasis === 'local' && random() > 0.45;
+  const strapEnabled = random() > 0.6;
+  const pauldronEnabled = emphasis === 'local' && random() > 0.55;
+  const hemPattern = random() > 0.5;
+  const bootTrim = random() > 0.5;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -255,34 +303,115 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
       const basePixel = base[idx];
 
       if (!basePixel) {
-        if (capeEnabled && y >= headHeight - 1 && y < torsoBottom + 2 && x < center - 3 && x > 1) {
-          const capeShade = blendHexColors(capeColor, shadow, (y - headHeight + 1) / (torsoBottom - headHeight + 3));
+        if (capeEnabled && y >= headHeight - 1 && y < torsoBottom + 3 && x < torsoLeft && x > 0) {
+          const capeProgress = (y - (headHeight - 1)) / (torsoBottom - headHeight + 4);
+          let capeShade = blendHexColors(capeColor, shadow, capeProgress * 0.6);
+          capeShade = mixWithDither(capeShade, capeShadow, capeProgress * 0.7, x, y);
+          if (x === Math.max(1, torsoLeft - 2)) {
+            capeShade = blendHexColors(capeShade, outlineColor, 0.3);
+          }
           pixels[idx] = capeShade;
         }
         continue;
       }
 
-      let color = skinTone;
+      const isTemplateOutline = typeof basePixel === 'string' && basePixel.toLowerCase() === '#2c1b18';
+      if (isTemplateOutline) {
+        pixels[idx] = outlineColor;
+        continue;
+      }
 
-      if (y < headHeight - 1) {
-        color = skinTone;
-        if (y <= 1 || y === headHeight - 2) {
-          color = blendHexColors(color, outlineColor, 0.25);
+      let color = skinTone;
+      const isHead = y < headHeight - 1;
+      const isTorso = y >= headHeight - 1 && y < torsoBottom;
+      const isLegs = y >= torsoBottom;
+      const isLeftArm = isTorso && x >= armLeftStart && x <= armLeftEnd;
+      const isRightArm = isTorso && x >= armRightStart && x <= armRightEnd;
+      const isArm = isLeftArm || isRightArm;
+      const isTorsoCore = isTorso && !isArm;
+
+      const lightInfluence = (center - x) / width + 0.2;
+
+      if (isHead) {
+        const hairLine = headHeight - Math.max(3, Math.floor(height * 0.08));
+        if (y <= hairLine) {
+          color = hairColor;
+          color = mixWithDither(color, hairHighlight, 0.6 - (y / headHeight) * 0.3, x, y);
+          if (lightInfluence < -0.1) {
+            color = mixWithDither(color, hairShadow, -lightInfluence * 0.7, x, y);
+          }
+        } else {
+          color = skinTone;
+          color = mixWithDither(color, skinHighlight, Math.max(0, lightInfluence + 0.2), x, y);
+          color = mixWithDither(color, skinShadow, Math.max(0, -lightInfluence + 0.1), x, y);
         }
-      } else if (y < torsoBottom) {
-        const wave = Math.sin((y + variant * 1.5) * 0.6 + x * 0.25);
-        color = wave > 0 ? clothPrimary : clothSecondary;
-        if (Math.abs(x - center) <= (platedTorso ? 2 : 1)) {
-          color = platedTorso ? blendHexColors(trim, clothPrimary, 0.4) : highlight;
+        if (y === hairLine && Math.abs(x - center) <= 2) {
+          color = blendHexColors(color, hairShadow, 0.4);
         }
-        if (y === headHeight && (x === center - 3 || x === center + 2)) {
-          color = trim;
+      } else if (isTorso) {
+        if (isArm) {
+          const armDepth = (y - headHeight + 1) / Math.max(1, torsoBottom - headHeight);
+          color = blendHexColors(clothSecondary, clothPrimary, 0.35);
+          color = mixWithDither(color, shadow, armDepth * 0.7 + (isLeftArm ? 0.15 : 0), x, y);
+          if (y >= beltRow - 1) {
+            color = blendHexColors(color, gloveColor, 0.6);
+          }
+          if (bootTrim && y === beltRow - 1) {
+            color = blendHexColors(color, trim, 0.45);
+          }
+        } else {
+          const torsoProgress = (y - (headHeight - 1)) / Math.max(1, torsoBottom - headHeight);
+          const horizontal = Math.abs(x - center) / Math.max(1, torsoHalf);
+          color = horizontal < 0.35 ? clothPrimary : midTone;
+          color = mixWithDither(color, shadow, Math.max(0, horizontal - 0.2) + torsoProgress * 0.2, x, y);
+          color = mixWithDither(color, highlight, Math.max(0, 0.5 - horizontal) * (platedTorso ? 0.8 : 0.6), x, y);
+
+          if (platedTorso && Math.abs(x - center) <= 1 && y > headHeight && y < beltRow) {
+            color = blendHexColors(color, trim, 0.55);
+          }
+          if (strapEnabled && (x === center - 2 || (x === center - 1 && y % 3 === 0))) {
+            if (y > headHeight && y < beltRow) {
+              color = blendHexColors(strapColor, shadow, 0.35);
+            }
+          }
+          if (pauldronEnabled && y <= headHeight + 1 && Math.abs(x - center) >= torsoHalf - 1) {
+            color = blendHexColors(trim, highlight, 0.4);
+            color = mixWithDither(color, shadow, 0.45, x, y);
+          }
         }
-      } else {
-        const legMix = (y - torsoBottom) / Math.max(1, height - torsoBottom);
-        color = blendHexColors(bootColor, clothSecondary, Math.max(0, 0.6 - legMix * 0.4));
-        if (y >= height - 2) {
-          color = blendHexColors(bootColor, shadow, 0.5);
+
+        if (y === headHeight && Math.abs(x - center) <= torsoHalf - 2) {
+          color = blendHexColors(color, trim, 0.35);
+        }
+        if (y === beltRow) {
+          color = blendHexColors(trim, shadow, 0.2);
+          if (Math.abs(x - center) <= 1) {
+            color = blendHexColors(color, gemColor, 0.6);
+          }
+        }
+      } else if (isLegs) {
+        const legIsLeft = x < center;
+        const legBase = blendHexColors(clothSecondary, '#111827', legIsLeft ? 0.35 : 0.45);
+        const bootTop = height - Math.max(3, Math.floor(height * 0.18));
+        const kneeRow = torsoBottom + Math.max(1, Math.floor((height - torsoBottom) * 0.45));
+        color = legBase;
+        color = mixWithDither(color, deepShadow, Math.max(0, -lightInfluence + 0.15), x, y);
+        if (y <= kneeRow) {
+          color = mixWithDither(color, highlight, Math.max(0, lightInfluence + 0.2) * 0.8, x, y);
+        }
+        if (y === kneeRow && ((x >= leftLegStart && x < leftLegStart + legWidth) || (x >= rightLegStart && x < rightLegStart + legWidth))) {
+          color = blendHexColors(color, highlight, 0.45);
+        }
+        if (y >= bootTop) {
+          color = bootColor;
+          color = mixWithDither(color, bootShadow, Math.max(0, -lightInfluence + 0.2), x, y);
+          color = mixWithDither(color, bootHighlight, Math.max(0, lightInfluence + 0.25), x, y);
+          if (bootTrim && y === bootTop) {
+            color = blendHexColors(color, trim, 0.4);
+          }
+        }
+        if (hemPattern && y === bootTop - 1 && (x + y) % 2 === 0) {
+          color = blendHexColors(color, clothPrimary, 0.35);
         }
       }
 
@@ -290,12 +419,14 @@ function stylizedPixels(request: AIRequest, options: { variant?: number; emphasi
         color = trim;
       }
 
-      const sway = Math.sin(variant * 0.8 + y * 0.45) * 0.12;
+      const sway = Math.sin(variant * 0.8 + y * 0.35) * 0.1;
       const relative = (x - center) / width + sway;
-      if (relative > 0.08) {
-        color = blendHexColors(color, shadow, emphasis === 'local' ? 0.45 : 0.25);
-      } else if (relative < -0.08) {
-        color = blendHexColors(color, highlight, 0.2);
+      if (!isHead) {
+        if (relative > 0.08) {
+          color = mixWithDither(color, shadow, emphasis === 'local' ? 0.65 : 0.4, x, y);
+        } else if (relative < -0.08) {
+          color = mixWithDither(color, highlight, 0.45, x, y);
+        }
       }
 
       if (x === 0 || x === width - 1 || y === height - 1) {
