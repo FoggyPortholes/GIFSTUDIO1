@@ -39,6 +39,10 @@ const versionManifestPlugin: Plugin = {
 };
 
 export default defineConfig({
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+  },
   plugins: [react(), versionManifestPlugin],
   server: { port: 5173, strictPort: false },
   define: {

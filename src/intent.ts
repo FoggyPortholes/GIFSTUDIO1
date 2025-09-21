@@ -1,0 +1,1 @@
+export const APP_INTENT = 'Character Creator with AI image generation and simple GIF creation tools';

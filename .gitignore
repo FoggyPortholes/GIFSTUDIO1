@@ -1,6 +1,12 @@
 node_modules/
-logs/
-public/animation.gif
 dist/
+build/
 build-tests/
+logs/
+.vite/
+public/animation.gif
 *.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
