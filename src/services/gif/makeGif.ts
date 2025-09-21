@@ -25,7 +25,7 @@ export function makeGif(frames: GifFrame[], options: GifOptions): Uint8Array {
   frames.forEach(assertFrame);
 
   const encoder = GIFEncoder();
-  const repeat = options.loop ? 0 : 1;
+  const repeat = options.loop ? 0 : -1;
 
   frames.forEach((frame) => {
     const palette = quantize(frame.rgba, 256);
