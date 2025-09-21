@@ -64,3 +64,37 @@ At C:\Users\Travis\Downloads\gif_studio_spicy_pickle_lite_debug_v1.3.0\launch.ps
     + CategoryInfo          : NotSpecified: (The system cann...path specified.:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
 
+**********************
+Windows PowerShell transcript start
+Start time: 20250920171855
+Username: T-Desktop\Travis
+RunAs User: T-Desktop\Travis
+Configuration Name: 
+Machine: T-DESKTOP (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -file  C:\Users\Travis\Documents\GitHub\gifs\GIFSTUDIO1\launch.ps1 
+Process ID: 9500
+PSVersion: 5.1.26100.6584
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.6584
+BuildVersion: 10.0.26100.6584
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is logs/launch-2025-09-20.log
+Installing dependencies...
+PS>TerminatingError(npm.cmd): "The running command stopped because the preference variable "ErrorActionPreference" or common parameter is set to Stop: The system cannot find the path specified."
+>> TerminatingError(npm.cmd): "The running command stopped because the preference variable "ErrorActionPreference" or common parameter is set to Stop: The system cannot find the path specified."
+The running command stopped because the preference variable "ErrorActionPreference" or common parameter is set to Stop: The system cannot find the path specified.
+npm.cmd : The system cannot find the path specified.
+At C:\Users\Travis\Documents\GitHub\gifs\GIFSTUDIO1\launch.ps1:66 char:5
++     & "$npmCmd" install 2>&1 | Tee-Object -FilePath "logs/install.log ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The system cann...path specified.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+**********************
+Windows PowerShell transcript end
+End time: 20250920171855
+**********************
