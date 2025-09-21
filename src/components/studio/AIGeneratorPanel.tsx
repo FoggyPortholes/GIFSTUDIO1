@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudioStore, useActiveCharacter } from '../../store/studioStore';
 import {
   generateAIImage,
@@ -32,6 +32,7 @@ export function AIGeneratorPanel() {
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [localRuntime, setLocalRuntime] = useState<StableDiffusionState | null>(() => getStableDiffusionState());
   const [customModelName, setCustomModelName] = useState<string>('');
+  const directoryInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedModelId = state.settings.stableDiffusionModel ?? localRuntime?.model ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID;
   const selectedSuggestion = useMemo(() => getModelSuggestionById(selectedModelId), [selectedModelId]);
@@ -101,6 +102,103 @@ export function AIGeneratorPanel() {
       setSetupPhase('ready');
     }
   }, [localRuntime]);
+
+  useEffect(() => {
+    if (directoryInputRef.current) {
+      directoryInputRef.current.setAttribute('webkitdirectory', '');
+      directoryInputRef.current.setAttribute('directory', '');
+      directoryInputRef.current.setAttribute('multiple', '');
+    }
+  }, []);
+
+  const applyInstallPath = useCallback(
+    (rawPath: string) => {
+      const trimmed = rawPath.trim();
+      if (!trimmed) {
+        return;
+      }
+      dispatch({ type: 'SET_SETTINGS', settings: { stableDiffusionPath: trimmed } });
+      logInfo('Stable Diffusion install path updated', { path: trimmed });
+    },
+    [dispatch]
+  );
+
+  const handleDirectoryPickerChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const { files } = event.target;
+      if (!files || files.length === 0) {
+        logWarn('Directory selection cancelled or empty.');
+        return;
+      }
+
+      const firstFile = files[0] as File & { path?: string };
+      const filePath = typeof firstFile.path === 'string' ? firstFile.path : undefined;
+      const relativePath = typeof firstFile.webkitRelativePath === 'string' ? firstFile.webkitRelativePath : undefined;
+
+      let derivedPath: string | undefined;
+      if (filePath) {
+        if (relativePath && relativePath.length > 0) {
+          const sanitizedRelative = relativePath.replace(/^[/\\]+/, '');
+          const index = sanitizedRelative ? filePath.lastIndexOf(sanitizedRelative) : -1;
+          if (index >= 0) {
+            derivedPath = filePath.slice(0, index).replace(/[\\/]+$/, '');
+          }
+        }
+        if (!derivedPath) {
+          const separatorIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+          derivedPath = separatorIndex >= 0 ? filePath.slice(0, separatorIndex) : filePath;
+        }
+      } else if (relativePath && relativePath.length > 0) {
+        const rootSegment = relativePath.split(/[/\\]/)[0];
+        if (rootSegment) {
+          derivedPath = rootSegment;
+        }
+      }
+
+      if (derivedPath) {
+        applyInstallPath(derivedPath);
+      } else {
+        logWarn('Unable to determine Stable Diffusion path from directory selection.');
+      }
+
+      event.target.value = '';
+    },
+    [applyInstallPath]
+  );
+
+  const handleBrowseInstallLocation = useCallback(async () => {
+    if (typeof window === 'undefined') {
+      if (directoryInputRef.current) {
+        directoryInputRef.current.click();
+      }
+      return;
+    }
+
+    const anyWindow = window as typeof window & {
+      showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
+    };
+
+    if (typeof anyWindow.showDirectoryPicker === 'function') {
+      try {
+        const handle = await anyWindow.showDirectoryPicker();
+        if (handle) {
+          const directoryName = handle.name ?? '';
+          if (directoryName) {
+            applyInstallPath(directoryName);
+            return;
+          }
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          logWarn('Directory picker did not complete successfully', { error });
+        }
+      }
+    }
+
+    if (directoryInputRef.current) {
+      directoryInputRef.current.click();
+    }
+  }, [applyInstallPath]);
 
   const handleGenerateSprite = async () => {
     setStatus('Generating sprite...');
@@ -415,15 +513,26 @@ export function AIGeneratorPanel() {
         </label>
         <label className="field">
           Install location
-          <input
-            type="text"
-            placeholder="~/stable-diffusion/1.5"
-            value={state.settings.stableDiffusionPath ?? ''}
-            onChange={(event) =>
-              dispatch({ type: 'SET_SETTINGS', settings: { stableDiffusionPath: event.target.value } })
-            }
-          />
+          <div className="install-path">
+            <input
+              type="text"
+              placeholder="~/stable-diffusion/1.5"
+              value={state.settings.stableDiffusionPath ?? ''}
+              onChange={(event) =>
+                dispatch({ type: 'SET_SETTINGS', settings: { stableDiffusionPath: event.target.value } })
+              }
+            />
+            <button type="button" onClick={handleBrowseInstallLocation}>
+              Browse…
+            </button>
+          </div>
         </label>
+        <input
+          ref={directoryInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={handleDirectoryPickerChange}
+        />
         <div className="runtime-status">
           <strong>Status:</strong> {runtimeStatus}
         </div>
