@@ -1,0 +1,112 @@
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+new file mode 100644
+--- /dev/null
++++ b/.github/workflows/release.yml
+@@
++name: Build & Release Gif Studio
++
++on:
++  push:
++    tags:
++      - "v*.*.*"
++
++jobs:
++  build-release:
++    runs-on: windows-latest
++
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version: "20.x"
++
++      - name: Install dependencies
++        run: npm install
++
++      - name: Build zip
++        run: |
++          mkdir dist
++          7z a dist/gif_studio-${{ github.ref_name }}.zip * -xr!node_modules
++
++      - name: Upload Release
++        uses: softprops/action-gh-release@v2
++        with:
++          files: dist/*.zip
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+diff --git a/verify_repo.ps1 b/verify_repo.ps1
+new file mode 100644
+--- /dev/null
++++ b/verify_repo.ps1
+@@
++$ErrorActionPreference = "Stop"
++
++Write-Host "=== Verifying & Auto-Fixing GIFSTUDIO1 Repository ==="
++
++if (!(Test-Path "logs")) { New-Item -ItemType Directory -Force -Path "logs" | Out-Null }
++$logFile = "logs/verify-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
++Start-Transcript -Path $logFile -Append
++
++$requiredDirs = @("src", "public", "logs", "node-portable", ".github\workflows")
++$requiredFiles = @("launch.ps1","launch.bat","features.txt","package.json","vite.config.ts","tsconfig.json","index.html")
++
++foreach ($d in $requiredDirs) {
++    if (!(Test-Path $d)) {
++        Write-Host "✖ Missing dir: $d"
++        New-Item -ItemType Directory -Force -Path $d | Out-Null
++    }
++}
++
++foreach ($f in $requiredFiles) {
++    if (!(Test-Path $f)) {
++        Write-Host "✖ Missing file: $f"
++    }
++}
++
++if (!(Test-Path ".github\workflows\release.yml")) {
++    Write-Host "⚠ release.yml missing — creating..."
++    @'
++name: Build & Release Gif Studio
++on:
++  push:
++    tags:
++      - "v*.*.*"
++jobs:
++  build-release:
++    runs-on: windows-latest
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version: "20.x"
++      - name: Install dependencies
++        run: npm install
++      - name: Build zip
++        run: |
++          mkdir dist
++          7z a dist/gif_studio-${{ github.ref_name }}.zip * -xr!node_modules
++      - name: Upload Release
++        uses: softprops/action-gh-release@v2
++        with:
++          files: dist/*.zip
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++'@ | Out-File -FilePath ".github\workflows\release.yml" -Encoding UTF8 -Force
++}
++
++try {
++    git add -A
++    git commit -m "Auto-added release workflow & verify script"
++    git push origin main
++    Write-Host "✔ Changes committed & pushed"
++} catch {
++    Write-Host "⚠ Git push skipped"
++}
++
++Stop-Transcript
++Write-Host "=== Done ==="
