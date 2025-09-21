@@ -66,6 +66,84 @@ export interface StableDiffusionState extends StableDiffusionSetupResult {
 const STABLE_DIFFUSION_STORAGE_KEY = 'pixel-persona-stable-diffusion-state';
 let inMemoryStableDiffusionState: StableDiffusionState | null = null;
 
+type ProcessLike = {
+  env?: Record<string, string | undefined>;
+  cwd?: () => string;
+};
+
+function getProcess(): ProcessLike | undefined {
+  if (typeof globalThis === 'undefined') {
+    return undefined;
+  }
+  const candidate = (globalThis as { process?: ProcessLike }).process;
+  return candidate;
+}
+
+function getHomeDirectory(): string | undefined {
+  const proc = getProcess();
+  if (!proc?.env) return undefined;
+  return proc.env.HOME ?? proc.env.USERPROFILE;
+}
+
+function getWorkingDirectory(): string | undefined {
+  const proc = getProcess();
+  if (!proc?.cwd) return undefined;
+  try {
+    return proc.cwd();
+  } catch (error) {
+    console.warn('Failed to read working directory', error);
+    return undefined;
+  }
+}
+
+function isAbsolutePath(path: string) {
+  if (!path) return false;
+  if (path.startsWith('\\\\')) return true;
+  if (path.startsWith('/')) return true;
+  return /^[a-zA-Z]:[\\/]/.test(path);
+}
+
+function normalizeSeparators(value: string, useBackslash: boolean) {
+  if (useBackslash) {
+    return value.replace(/\//g, '\\');
+  }
+  return value.replace(/\\/g, '/');
+}
+
+function joinWithWorkingDirectory(relativePath: string, workingDirectory: string) {
+  const useBackslash = /\\/.test(workingDirectory);
+  const separator = useBackslash ? '\\' : '/';
+  const sanitizedBase = workingDirectory.replace(/[\\/]+$/, '');
+  const sanitizedRelative = normalizeSeparators(relativePath.replace(/^[\\/]+/, ''), useBackslash);
+  return `${sanitizedBase}${separator}${sanitizedRelative}`;
+}
+
+function resolveStableDiffusionInstallPath(version: string, installPath?: string) {
+  const fallback = `~/stable-diffusion/${version}`;
+  const trimmed = installPath?.trim();
+  const rawPath = trimmed && trimmed.length > 0 ? trimmed : fallback;
+
+  let expanded = rawPath;
+  if (rawPath.startsWith('~')) {
+    const home = getHomeDirectory();
+    if (home) {
+      const sanitizedHome = home.replace(/[\\/]+$/, '');
+      expanded = `${sanitizedHome}${rawPath.slice(1)}`;
+    }
+  }
+
+  if (isAbsolutePath(expanded)) {
+    return expanded;
+  }
+
+  const workingDirectory = getWorkingDirectory();
+  if (!workingDirectory) {
+    return expanded;
+  }
+
+  return joinWithWorkingDirectory(expanded, workingDirectory);
+}
+
 function getStorage() {
   try {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -125,7 +203,7 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
     logs.push(message);
   };
 
-  const path = options.installPath ?? `~/stable-diffusion/${options.version}`;
+  const path = resolveStableDiffusionInstallPath(options.version, options.installPath);
   const existing = loadStableDiffusionState();
   const trimmedModel = options.preferredModel?.trim();
   const normalizedModel = trimmedModel && trimmedModel.length > 0 ? trimmedModel : undefined;
