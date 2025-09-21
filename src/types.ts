@@ -32,6 +32,14 @@ export interface CharacterModel {
 }
 
 export type BrushMode = 'paint' | 'erase' | 'eyedrop';
+export type MirrorMode = 'none' | 'vertical' | 'horizontal' | 'both';
+
+export interface OnionSkinSettings {
+  enabled: boolean;
+  previous: number;
+  next: number;
+  opacity: number;
+}
 
 export interface StudioSettings {
   aiEndpoint?: string;
@@ -54,6 +62,8 @@ export interface StudioState {
   activeLayerId: string;
   brushColor: string;
   brushMode: BrushMode;
+  mirrorMode: MirrorMode;
   pixelScale: number;
   settings: StudioSettings;
+  onionSkin: OnionSkinSettings;
 }

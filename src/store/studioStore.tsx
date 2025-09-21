@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { BrushMode, CharacterModel, Frame, Layer, PixelColor, StudioSettings, StudioState } from '../types';
-import { DEFAULT_STABLE_DIFFUSION_MODEL_ID } from '../services/stableDiffusionModelCatalog';
 import { createBlankAnimationFrame, createDerivedFrame, createId, createNormalizedCharacter } from '../utils/characterTemplate';
 import { blankPixels } from '../utils/frame';
 
@@ -24,12 +22,16 @@ type StudioAction =
   | { type: 'PAINT_PIXEL'; x: number; y: number; color: PixelColor }
   | { type: 'SET_BRUSH_COLOR'; color: string }
   | { type: 'SET_BRUSH_MODE'; mode: BrushMode }
+  | { type: 'SET_MIRROR_MODE'; mode: MirrorMode }
   | { type: 'SET_PIXEL_SCALE'; scale: number }
   | { type: 'SET_SETTINGS'; settings: Partial<StudioSettings> }
   | { type: 'ADD_PALETTE_COLOR'; color: string }
   | { type: 'UPDATE_PALETTE_COLOR'; index: number; color: string }
   | { type: 'REMOVE_PALETTE_COLOR'; index: number }
   | { type: 'SET_LAYER_PIXELS'; layerId: string; pixels: PixelColor[] }
+  | { type: 'SET_ONION_ENABLED'; enabled: boolean }
+  | { type: 'SET_ONION_RANGE'; direction: 'previous' | 'next'; count: number }
+  | { type: 'SET_ONION_OPACITY'; opacity: number }
   | { type: 'HYDRATE'; state: StudioState };
 
 type StudioContextType = {
@@ -62,7 +64,7 @@ function updateCharacter(state: StudioState, characterId: string, updater: (char
 function reducer(state: StudioState, action: StudioAction): StudioState {
   switch (action.type) {
     case 'HYDRATE':
-      return action.state;
+      return normalizeState(action.state);
     case 'SET_ACTIVE_CHARACTER': {
       const character = state.characters.find((c) => c.id === action.id) ?? state.characters[0];
       const frame = ensureFrame(character, character.frames[0]?.id);
@@ -279,6 +281,8 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
       return { ...state, brushColor: action.color };
     case 'SET_BRUSH_MODE':
       return { ...state, brushMode: action.mode };
+    case 'SET_MIRROR_MODE':
+      return { ...state, mirrorMode: action.mode };
     case 'SET_PIXEL_SCALE':
       return { ...state, pixelScale: Math.max(4, Math.min(48, Math.round(action.scale))) };
     case 'SET_SETTINGS':
@@ -307,9 +311,36 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
         brushColor,
       };
     }
+    case 'SET_ONION_ENABLED':
+      return {
+        ...state,
+        onionSkin: { ...state.onionSkin, enabled: action.enabled },
+      };
+    case 'SET_ONION_RANGE': {
+      const value = clamp(action.count, 0, 4);
+      if (action.direction === 'previous') {
+        return {
+          ...state,
+          onionSkin: { ...state.onionSkin, previous: value },
+        };
+      }
+      return {
+        ...state,
+        onionSkin: { ...state.onionSkin, next: value },
+      };
+    }
+    case 'SET_ONION_OPACITY':
+      return {
+        ...state,
+        onionSkin: { ...state.onionSkin, opacity: clamp(action.opacity, 0.1, 1) },
+      };
     default:
       return state;
   }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function createDefaultSettings(): StudioSettings {
@@ -328,6 +359,37 @@ function createDefaultSettings(): StudioSettings {
   };
 }
 
+function createDefaultOnionSkin(): OnionSkinSettings {
+  return {
+    enabled: false,
+    previous: 1,
+    next: 1,
+    opacity: 0.45,
+  };
+}
+
+function normalizeState(state: StudioState): StudioState {
+  const defaults = createDefaultSettings();
+  const onionDefaults = createDefaultOnionSkin();
+  const onion = { ...onionDefaults, ...(state.onionSkin ?? {}) };
+  const normalizedPrevious = clamp(Math.round(onion.previous), 0, 4);
+  const normalizedNext = clamp(Math.round(onion.next), 0, 4);
+  const normalizedOpacity = clamp(onion.opacity, 0.1, 1);
+  return {
+    ...state,
+    brushMode: state.brushMode ?? 'paint',
+    mirrorMode: state.mirrorMode ?? 'none',
+    pixelScale: clamp(Math.round(state.pixelScale ?? 16), 4, 48),
+    settings: { ...defaults, ...state.settings },
+    onionSkin: {
+      ...onion,
+      previous: normalizedPrevious,
+      next: normalizedNext,
+      opacity: normalizedOpacity,
+    },
+  };
+}
+
 export function createInitialState(): StudioState {
   const defaults = createDefaultSettings();
   if (typeof window !== 'undefined') {
@@ -336,10 +398,7 @@ export function createInitialState(): StudioState {
       try {
         const parsed = JSON.parse(raw) as StudioState;
         if (parsed && parsed.characters?.length) {
-          return {
-            ...parsed,
-            settings: { ...defaults, ...parsed.settings },
-          };
+          return normalizeState(parsed);
         }
       } catch (error) {
         console.warn('Failed to parse saved studio state', error);
@@ -349,16 +408,18 @@ export function createInitialState(): StudioState {
   const character = createNormalizedCharacter();
   const frame = character.frames[0];
   const layer = frame.layers.find((l) => !l.locked) ?? frame.layers[0];
-  return {
+  return normalizeState({
     characters: [character],
     activeCharacterId: character.id,
     activeFrameId: frame.id,
     activeLayerId: layer.id,
     brushColor: character.palette[0],
     brushMode: 'paint',
+    mirrorMode: 'none',
     pixelScale: 16,
     settings: defaults,
-  };
+    onionSkin: createDefaultOnionSkin(),
+  });
 }
 
 export function StudioProvider({ children }: { children: React.ReactNode }) {
