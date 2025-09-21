@@ -161,6 +161,103 @@ textarea, input {
   letter-spacing: 0.08em;
 }
 
+.panel-subheader {
+  font-weight: 600;
+  color: #38bdf8;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  margin-top: 8px;
+}
+
+.runtime-status {
+  background: rgba(14, 116, 144, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #bae6fd;
+}
+
+.runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.runtime-actions button {
+  flex: 1;
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  padding: 10px 16px;
+  color: #e0f2fe;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.runtime-actions button:hover {
+  background: rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.runtime-actions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
+.setup-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(30, 64, 175, 0.16);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.setup-progress .progress-bar {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.7), rgba(129, 140, 248, 0.9));
+  transition: width 160ms ease;
+}
+
+.progress-message {
+  font-size: 13px;
+  color: #c7d2fe;
+}
+
+.progress-phase {
+  font-size: 11px;
+  color: #a5b4fc;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.setup-log {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #cbd5f5;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.setup-log li {
+  position: relative;
+}
+
+.setup-log li::before {
+  content: '•';
+  position: absolute;
+  left: -12px;
+  color: #60a5fa;
+}
+
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));

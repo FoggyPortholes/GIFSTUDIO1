@@ -38,6 +38,11 @@ export interface StudioSettings {
   aiApiKey?: string;
   aiModel?: string;
   preferProcedural: boolean;
+  enableLocalAi: boolean;
+  stableDiffusionAutoDownload: boolean;
+  stableDiffusionReady: boolean;
+  stableDiffusionVersion?: string;
+  stableDiffusionPath?: string;
 }
 
 export interface StudioState {
