@@ -12,6 +12,66 @@ function Write-Warn([string]$Message) {
     Write-Host "[!] $Message"
 }
 
+$cmdExe = if ($env:ComSpec) { $env:ComSpec } else { "cmd.exe" }
+
+function ConvertTo-CmdArgument {
+    param(
+        [string]$Value
+    )
+
+    if ($null -eq $Value) {
+        return '""'
+    }
+
+    if ($Value -notmatch '[\s\"]') {
+        return $Value
+    }
+
+    $escaped = $Value -replace '"', '""'
+    return '"' + $escaped + '"'
+}
+
+function Get-CmdInvocationString {
+    param(
+        [string]$Executable,
+        [string[]]$Arguments
+    )
+
+    $parts = @($Executable) + $Arguments
+    return ($parts | ForEach-Object { ConvertTo-CmdArgument $_ }) -join ' '
+}
+
+function Invoke-Npm {
+    param(
+        [string[]]$Arguments,
+        [string]$LogPath
+    )
+
+    $command = Get-CmdInvocationString -Executable $npmCmd -Arguments $Arguments
+    $cmdArgs = @("/d", "/s", "/c", $command)
+
+    if ($LogPath) {
+        & $cmdExe $cmdArgs | Tee-Object -FilePath $LogPath
+    } else {
+        & $cmdExe $cmdArgs
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "npm command failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Start-NpmProcess {
+    param(
+        [string[]]$Arguments
+    )
+
+    $command = Get-CmdInvocationString -Executable $npmCmd -Arguments $Arguments
+    $cmdArgs = @("/d", "/s", "/c", $command)
+
+    return Start-Process -FilePath $cmdExe -ArgumentList $cmdArgs -WorkingDirectory $CURRENT_DIR -PassThru -NoNewWindow
+}
+
 function Stop-TranscriptSafe {
     try {
         Stop-Transcript | Out-Null
@@ -120,10 +180,6 @@ function Get-FileHashHex {
 }
 
 function Ensure-Dependencies {
-    param(
-        [string]$NpmCmd
-    )
-
     $lockFile = Join-Path $CURRENT_DIR "package-lock.json"
     $lockHash = Get-FileHashHex $lockFile
     $needInstall = $false
@@ -153,9 +209,9 @@ function Ensure-Dependencies {
     Write-Step "Installing dependencies..."
     try {
         if (Test-Path $lockFile) {
-            & $NpmCmd ci | Tee-Object -FilePath $logPath
+            Invoke-Npm -Arguments @("ci") -LogPath $logPath
         } else {
-            & $NpmCmd install | Tee-Object -FilePath $logPath
+            Invoke-Npm -Arguments @("install") -LogPath $logPath
         }
     } catch {
         Write-Warn "Dependency installation failed. Retrying with a clean state..."
@@ -163,9 +219,9 @@ function Ensure-Dependencies {
             Remove-Item -Path "node_modules" -Recurse -Force
         }
         if (Test-Path $lockFile) {
-            & $NpmCmd ci | Tee-Object -FilePath $logPath
+            Invoke-Npm -Arguments @("ci") -LogPath $logPath
         } else {
-            & $NpmCmd install | Tee-Object -FilePath $logPath
+            Invoke-Npm -Arguments @("install") -LogPath $logPath
         }
     }
 
@@ -200,12 +256,11 @@ function Wait-ForServer {
 
 function Start-App {
     param(
-        [string]$NpmCmd,
         [int]$TryPort
     )
 
     Write-Step "Launching on port $TryPort..."
-    $process = Start-Process $NpmCmd -ArgumentList "run", "dev", "--", "--port", "$TryPort", "--host" -WorkingDirectory $CURRENT_DIR -PassThru -NoNewWindow
+    $process = Start-NpmProcess -Arguments @("run", "dev", "--", "--port", "$TryPort", "--host")
 
     if (Wait-ForServer -TryPort $TryPort) {
         Set-Content $lastPortFile $TryPort
@@ -231,15 +286,15 @@ if (!(Test-Path $npmCmd)) {
 
 Write-Step "Using Node.js located at $nodeBin"
 & $nodeExe -v
-& $npmCmd -v
+Invoke-Npm -Arguments @("-v")
 
-Ensure-Dependencies -NpmCmd $npmCmd
+Ensure-Dependencies
 
 $maxTries = 10
 $ok = $false
 for ($i = 0; $i -lt $maxTries; $i++) {
     $tryPort = [int]$port + $i
-    if (Start-App -NpmCmd $npmCmd -TryPort $tryPort) {
+    if (Start-App -TryPort $tryPort) {
         $ok = $true
         break
     }
