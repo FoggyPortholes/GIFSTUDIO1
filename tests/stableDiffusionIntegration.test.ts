@@ -143,6 +143,58 @@ async function testSetupPersistsStateInMemory() {
   globalThis.clearTimeout = originalClearTimeout;
 }
 
+async function testSetupExpandsInstallPath() {
+  const aiService = loadAiService();
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  globalThis.setTimeout = ((fn: (...args: unknown[]) => void) => {
+    fn();
+    return 0 as unknown as ReturnType<typeof originalSetTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+
+  setGlobal('window', undefined);
+  setGlobal('document', createMockDocument());
+
+  const previousHome = process?.env?.HOME;
+  const previousUserProfile = process?.env?.USERPROFILE;
+  if (process?.env) {
+    process.env.HOME = '/Users/tester';
+    delete process.env.USERPROFILE;
+  }
+
+  const result = await aiService.setupLocalStableDiffusion({
+    version: '3.0',
+    autoDownload: true,
+    installPath: '~/custom-models',
+    onProgress: () => undefined,
+  });
+
+  expectEqual(
+    result.path,
+    '/Users/tester/custom-models',
+    'Expected install path to expand the user directory when using a tilde prefix'
+  );
+
+  if (process?.env) {
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+    if (previousUserProfile === undefined) {
+      delete process.env.USERPROFILE;
+    } else {
+      process.env.USERPROFILE = previousUserProfile;
+    }
+  }
+
+  deleteGlobal('document');
+  deleteGlobal('window');
+  globalThis.setTimeout = originalSetTimeout;
+  globalThis.clearTimeout = originalClearTimeout;
+}
+
 async function testProceduralFallbackWhenDisabled() {
   const aiService = loadAiService();
   setGlobal('window', undefined);
@@ -176,6 +228,7 @@ async function testProceduralFallbackWhenDisabled() {
 async function run() {
   await testLocalGenerationWithoutPersistentStorage();
   await testSetupPersistsStateInMemory();
+  await testSetupExpandsInstallPath();
   await testProceduralFallbackWhenDisabled();
 }
 
