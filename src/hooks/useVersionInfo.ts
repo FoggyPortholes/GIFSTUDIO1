@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { logWarn } from '../services/logger';
 
 type NullableString = string | null | undefined;
 
@@ -52,7 +53,7 @@ async function requestLatestManifest(): Promise<VersionManifest | null> {
       buildTime: data.buildTime
     };
   } catch (error) {
-    console.warn('[version] Failed to check for updates', error);
+    logWarn('[version] Failed to check for updates', { error });
     return null;
   }
 }

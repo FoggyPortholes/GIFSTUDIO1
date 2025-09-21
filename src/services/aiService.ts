@@ -2,6 +2,7 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { PixelColor, StudioSettings } from '../types';
 import { createNormalizedCharacter } from '../utils/characterTemplate';
 import { hexToRgba, adjustHexLightness, blendHexColors } from '../utils/color';
+import { logDebug, logError, logInfo, logWarn } from './logger';
 import {
   DEFAULT_STABLE_DIFFUSION_MODEL_ID,
   StableDiffusionModelSource,
@@ -92,7 +93,7 @@ function getWorkingDirectory(): string | undefined {
   try {
     return proc.cwd();
   } catch (error) {
-    console.warn('Failed to read working directory', error);
+    logWarn('Failed to read working directory', { error });
     return undefined;
   }
 }
@@ -152,7 +153,7 @@ function getStorage() {
     }
     return window.localStorage;
   } catch (error) {
-    console.warn('Local storage unavailable', error);
+    logWarn('Local storage unavailable', { error });
     return null;
   }
 }
@@ -169,7 +170,7 @@ function loadStableDiffusionState(): StableDiffusionState | null {
       inMemoryStableDiffusionState = parsed;
       return parsed;
     } catch (error) {
-      console.warn('Failed to parse Stable Diffusion state', error);
+      logWarn('Failed to parse Stable Diffusion state', { error });
       return inMemoryStableDiffusionState;
     }
   }
@@ -202,7 +203,16 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
   const report = (phase: StableDiffusionSetupPhase, percent: number, message: string) => {
     options.onProgress?.({ phase, percent, message });
     logs.push(message);
+    logDebug('Stable Diffusion setup progress', { phase, percent, message });
   };
+
+  logInfo('Stable Diffusion setup started', {
+    version: options.version,
+    installPath: options.installPath,
+    autoDownload: options.autoDownload,
+    preferredModel: options.preferredModel,
+    modelSource: options.modelSource,
+  });
 
   const path = resolveStableDiffusionInstallPath(options.version, options.installPath);
   const existing = loadStableDiffusionState();
@@ -241,7 +251,7 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       logs,
     };
     persistStableDiffusionState(state);
-    return {
+    const result = {
       ready: state.ready,
       version: state.version,
       path: state.path,
@@ -249,6 +259,13 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       model: state.model,
       modelSource: state.modelSource,
     };
+    logInfo('Stable Diffusion setup reused existing installation', {
+      version: result.version,
+      path: result.path,
+      model: result.model,
+      modelSource: result.modelSource,
+    });
+    return result;
   }
 
   if (!options.autoDownload) {
@@ -269,7 +286,7 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       modelSource: resolvedSource,
     };
     persistStableDiffusionState(state);
-    return {
+    const result = {
       ready: state.ready,
       version: state.version,
       path: state.path,
@@ -277,6 +294,13 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       model: state.model,
       modelSource: state.modelSource,
     };
+    logInfo('Stable Diffusion manual setup marked as ready', {
+      version: result.version,
+      path: result.path,
+      model: result.model,
+      modelSource: result.modelSource,
+    });
+    return result;
   }
 
   try {
@@ -300,7 +324,7 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       modelSource: resolvedSource,
     };
     persistStableDiffusionState(state);
-    return {
+    const result = {
       ready: state.ready,
       version: state.version,
       path: state.path,
@@ -308,6 +332,13 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       model: state.model,
       modelSource: state.modelSource,
     };
+    logInfo('Stable Diffusion assets downloaded', {
+      version: result.version,
+      path: result.path,
+      model: result.model,
+      modelSource: result.modelSource,
+    });
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const friendly = resolvedSuggestion?.name ?? resolvedModel;
@@ -323,7 +354,7 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       modelSource: resolvedSource,
     };
     persistStableDiffusionState(state);
-    return {
+    const result = {
       ready: false,
       version: options.version,
       path,
@@ -331,6 +362,8 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
       model: state.model,
       modelSource: state.modelSource,
     };
+    logError('Stable Diffusion setup error', { error, version: result.version, path: result.path });
+    return result;
   }
 }
 
@@ -731,6 +764,12 @@ async function callLocalStableDiffusion(request: AIRequest): Promise<AIImageResp
     request.settings.stableDiffusionModelSource ??
     state?.modelSource ??
     (getModelSuggestionById(modelPreference) ? 'suggested' : 'custom');
+  logDebug('Simulating local Stable Diffusion generation', {
+    model: modelPreference,
+    modelSource,
+    width: request.width,
+    height: request.height,
+  });
   const resolvedRequest: AIRequest = {
     ...request,
     settings: {
@@ -742,6 +781,11 @@ async function callLocalStableDiffusion(request: AIRequest): Promise<AIImageResp
   await delay(200);
   const pixels = stylizedPixels(resolvedRequest, { emphasis: 'local' });
   const imageUrl = pixelsToDataUrl(pixels, resolvedRequest.width, resolvedRequest.height);
+  logInfo('Local Stable Diffusion result prepared', {
+    model: modelPreference,
+    width: resolvedRequest.width,
+    height: resolvedRequest.height,
+  });
   return { imageUrl, pixels, source: 'local' };
 }
 
@@ -749,6 +793,11 @@ async function callRemoteEndpoint(request: AIRequest): Promise<AIImageResponse |
   if (!request.settings.aiEndpoint || request.settings.preferProcedural) {
     return null;
   }
+  logDebug('Calling remote AI endpoint', {
+    endpoint: request.settings.aiEndpoint,
+    hasApiKey: Boolean(request.settings.aiApiKey),
+    model: request.settings.aiModel,
+  });
   try {
     const response = await fetch(request.settings.aiEndpoint, {
       method: 'POST',
@@ -779,7 +828,10 @@ async function callRemoteEndpoint(request: AIRequest): Promise<AIImageResponse |
       };
     }
   } catch (error) {
-    console.warn('Remote AI request failed, falling back to procedural generation', error);
+    logWarn('Remote AI request failed, falling back to procedural generation', {
+      error,
+      endpoint: request.settings.aiEndpoint,
+    });
   }
   return null;
 }
@@ -791,19 +843,34 @@ export async function generateAIImage(request: AIRequest): Promise<AIImageRespon
   ]);
 
   if (remote && local) {
-    return { ...local, imageUrl: remote.imageUrl, source: remote.source, referenceUrl: local.imageUrl };
+    const combined = { ...local, imageUrl: remote.imageUrl, source: remote.source, referenceUrl: local.imageUrl };
+    logInfo('AI image generated with blended sources', {
+      finalSource: combined.source,
+      hasReference: true,
+    });
+    return combined;
   }
 
   if (remote) {
+    logInfo('AI image generated via remote endpoint', {
+      endpoint: request.settings.aiEndpoint,
+    });
     return remote;
   }
 
   if (local) {
+    logInfo('AI image generated via local Stable Diffusion', {
+      model: request.settings.stableDiffusionModel,
+    });
     return local;
   }
 
   const pixels = stylizedPixels(request, { emphasis: 'procedural' });
   const imageUrl = pixelsToDataUrl(pixels, request.width, request.height);
+  logInfo('AI image generated procedurally', {
+    width: request.width,
+    height: request.height,
+  });
   return { imageUrl, pixels, source: 'procedural' };
 }
 
@@ -830,11 +897,21 @@ export async function generateAIGif(request: AIRequest): Promise<AIGifResponse> 
       };
       const frames = buildAnimationFrames(resolvedRequest, 'local');
       const { gifUrl, frameUrls } = framesToGif(frames, resolvedRequest.width, resolvedRequest.height);
+      logInfo('AI GIF generated via local Stable Diffusion', {
+        frameCount: frameUrls.length,
+        width: resolvedRequest.width,
+        height: resolvedRequest.height,
+      });
       return { gifUrl, frames: frameUrls, source: 'local' };
     }
   }
 
   const frames = buildAnimationFrames(request, 'procedural');
   const { gifUrl, frameUrls } = framesToGif(frames, request.width, request.height);
+  logInfo('AI GIF generated procedurally', {
+    frameCount: frameUrls.length,
+    width: request.width,
+    height: request.height,
+  });
   return { gifUrl, frames: frameUrls, source: 'procedural' };
 }

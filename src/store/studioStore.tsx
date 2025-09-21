@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { createBlankAnimationFrame, createDerivedFrame, createId, createNormalizedCharacter } from '../utils/characterTemplate';
 import { blankPixels } from '../utils/frame';
 import { DEFAULT_STABLE_DIFFUSION_MODEL_ID } from '../services/stableDiffusionModelCatalog';
+import { logWarn } from '../services/logger';
 import type {
   BrushMode,
   CharacterModel,
@@ -413,7 +414,7 @@ export function createInitialState(): StudioState {
           return normalizeState(parsed);
         }
       } catch (error) {
-        console.warn('Failed to parse saved studio state', error);
+        logWarn('Failed to parse saved studio state', { error });
       }
     }
   }

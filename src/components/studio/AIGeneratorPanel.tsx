@@ -13,6 +13,7 @@ import {
   POPULAR_STABLE_DIFFUSION_MODELS,
   getModelSuggestionById,
 } from '../../services/stableDiffusionModelCatalog';
+import { logDebug, logError, logInfo, logWarn } from '../../services/logger';
 
 export function AIGeneratorPanel() {
   const { state, dispatch } = useStudioStore();
@@ -103,6 +104,14 @@ export function AIGeneratorPanel() {
 
   const handleGenerateSprite = async () => {
     setStatus('Generating sprite...');
+    logInfo('AI sprite generation requested', {
+      characterId: character.id,
+      width: character.width,
+      height: character.height,
+      seed,
+      enableLocal: state.settings.enableLocalAi,
+      preferProcedural: state.settings.preferProcedural,
+    });
     try {
       const result = await generateAIImage({
         prompt,
@@ -123,17 +132,32 @@ export function AIGeneratorPanel() {
               : 'procedural synthesizer'
         }.`
       );
+      logInfo('AI sprite generation completed', {
+        characterId: character.id,
+        source: result.source,
+        hasPixels: Boolean(result.pixels?.length),
+        hasReference: Boolean(result.referenceUrl),
+      });
       if (result.pixels) {
         dispatch({ type: 'SET_LAYER_PIXELS', layerId: state.activeLayerId, pixels: result.pixels });
       }
     } catch (error) {
-      console.error(error);
+      logError('AI sprite generation failed', { error, characterId: character.id });
       setStatus('Failed to generate sprite');
     }
   };
 
   const handleGenerateGif = async () => {
     setStatus('Synthesizing animated GIF...');
+    logInfo('AI GIF generation requested', {
+      characterId: character.id,
+      width: character.width,
+      height: character.height,
+      frames: character.frames.length,
+      seed,
+      enableLocal: state.settings.enableLocalAi,
+      preferProcedural: state.settings.preferProcedural,
+    });
     try {
       const result = await generateAIGif({
         prompt,
@@ -152,8 +176,13 @@ export function AIGeneratorPanel() {
             : 'procedural animator'
         }.`
       );
+      logInfo('AI GIF generation completed', {
+        characterId: character.id,
+        source: result.source,
+        frameCount: result.frames.length,
+      });
     } catch (error) {
-      console.error(error);
+      logError('AI GIF generation failed', { error, characterId: character.id });
       setStatus('Failed to generate GIF');
     }
   };
@@ -164,6 +193,12 @@ export function AIGeneratorPanel() {
     setSetupProgress(10);
     setSetupPhase('checking');
     setSetupMessage('Preparing local runtime...');
+    logInfo('Stable Diffusion setup requested', {
+      version: state.settings.stableDiffusionVersion ?? '1.5',
+      installPath: state.settings.stableDiffusionPath,
+      autoDownload: state.settings.stableDiffusionAutoDownload,
+      preferredModel: state.settings.stableDiffusionModel ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+    });
     try {
       const result = await setupLocalStableDiffusion({
         version: state.settings.stableDiffusionVersion ?? '1.5',
@@ -176,6 +211,7 @@ export function AIGeneratorPanel() {
           setSetupPhase(progress.phase);
           setSetupProgress(progress.percent);
           setSetupMessage(progress.message);
+          logDebug('Stable Diffusion setup progress', progress);
         },
       });
       setSetupLogs(result.logs);
@@ -195,11 +231,19 @@ export function AIGeneratorPanel() {
       setSetupMessage(result.ready ? 'Stable Diffusion runtime ready.' : 'Setup incomplete. Check logs.');
       setSetupProgress(100);
       setSetupPhase('ready');
+      logInfo('Stable Diffusion setup completed', {
+        ready: result.ready,
+        version: result.version,
+        path: result.path,
+        model: result.model,
+        modelSource: result.modelSource,
+      });
     } catch (error) {
-      console.error(error);
+      logError('Stable Diffusion setup failed', { error });
       setSetupMessage('Failed to configure Stable Diffusion');
       setSetupLogs((logs) => [...logs, 'Setup failed. Please verify your configuration.']);
       setSetupPhase('ready');
+      logWarn('Stable Diffusion setup encountered an error');
     } finally {
       setIsSettingUp(false);
     }
