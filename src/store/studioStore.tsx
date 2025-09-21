@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { BrushMode, CharacterModel, Frame, Layer, PixelColor, StudioSettings, StudioState } from '../types';
+import { DEFAULT_STABLE_DIFFUSION_MODEL_ID } from '../services/stableDiffusionModelCatalog';
 import { createBlankAnimationFrame, createDerivedFrame, createId, createNormalizedCharacter } from '../utils/characterTemplate';
 import { blankPixels } from '../utils/frame';
 
@@ -322,6 +323,8 @@ function createDefaultSettings(): StudioSettings {
     aiEndpoint: undefined,
     aiApiKey: undefined,
     aiModel: undefined,
+    stableDiffusionModel: DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+    stableDiffusionModelSource: 'suggested',
   };
 }
 

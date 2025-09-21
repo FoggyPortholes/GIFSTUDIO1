@@ -208,6 +208,76 @@ textarea, input {
   color: #bae6fd;
 }
 
+.model-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.model-selection select,
+.model-selection input {
+  width: 100%;
+}
+
+.model-suggestion {
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.model-suggestion__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.model-suggestion__title {
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.model-suggestion__rating {
+  font-size: 12px;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.model-suggestion__description {
+  font-size: 13px;
+  color: #cbd5f5;
+  margin: 0;
+}
+
+.model-suggestion__meta {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #38bdf8;
+}
+
+.model-suggestion__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.model-suggestion__tag {
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
 .runtime-actions {
   display: flex;
   flex-wrap: wrap;

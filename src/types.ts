@@ -37,6 +37,8 @@ export interface StudioSettings {
   aiEndpoint?: string;
   aiApiKey?: string;
   aiModel?: string;
+  stableDiffusionModel?: string;
+  stableDiffusionModelSource?: 'suggested' | 'custom';
   preferProcedural: boolean;
   enableLocalAi: boolean;
   stableDiffusionAutoDownload: boolean;

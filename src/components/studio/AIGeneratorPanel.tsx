@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useStudioStore, useActiveCharacter } from '../../store/studioStore';
 import {
   generateAIImage,
@@ -8,6 +8,11 @@ import {
   StableDiffusionSetupProgress,
   StableDiffusionState,
 } from '../../services/aiService';
+import {
+  DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+  POPULAR_STABLE_DIFFUSION_MODELS,
+  getModelSuggestionById,
+} from '../../services/stableDiffusionModelCatalog';
 
 export function AIGeneratorPanel() {
   const { state, dispatch } = useStudioStore();
@@ -24,6 +29,12 @@ export function AIGeneratorPanel() {
   const [setupLogs, setSetupLogs] = useState<string[]>([]);
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [localRuntime, setLocalRuntime] = useState<StableDiffusionState | null>(() => getStableDiffusionState());
+  const [customModelName, setCustomModelName] = useState<string>('');
+
+  const selectedModelId = state.settings.stableDiffusionModel ?? localRuntime?.model ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID;
+  const selectedSuggestion = useMemo(() => getModelSuggestionById(selectedModelId), [selectedModelId]);
+  const selectedOptionValue = selectedSuggestion ? selectedSuggestion.id : 'custom';
+  const effectiveModelName = selectedSuggestion?.name ?? selectedModelId ?? 'custom pipeline';
 
   useEffect(() => {
     const runtime = getStableDiffusionState();
@@ -31,23 +42,54 @@ export function AIGeneratorPanel() {
       setLocalRuntime(runtime);
       const shouldUpdatePath = state.settings.stableDiffusionPath !== runtime.path;
       const shouldUpdateVersion = state.settings.stableDiffusionVersion !== runtime.version;
-      if (!state.settings.stableDiffusionReady || shouldUpdatePath || shouldUpdateVersion) {
+      const shouldUpdateModel = runtime.model && state.settings.stableDiffusionModel !== runtime.model;
+      const shouldEnableLocal = !state.settings.enableLocalAi;
+      const shouldDisableProcedural = state.settings.preferProcedural;
+      if (
+        !state.settings.stableDiffusionReady ||
+        shouldUpdatePath ||
+        shouldUpdateVersion ||
+        shouldUpdateModel ||
+        shouldEnableLocal ||
+        shouldDisableProcedural
+      ) {
         dispatch({
           type: 'SET_SETTINGS',
           settings: {
             stableDiffusionReady: true,
             stableDiffusionPath: runtime.path,
             stableDiffusionVersion: runtime.version,
+            stableDiffusionModel: runtime.model ?? state.settings.stableDiffusionModel ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+            stableDiffusionModelSource: runtime.modelSource ?? state.settings.stableDiffusionModelSource ?? 'suggested',
+            enableLocalAi: true,
+            preferProcedural: false,
           },
         });
       }
     } else if (state.settings.stableDiffusionReady) {
       dispatch({
         type: 'SET_SETTINGS',
-        settings: { stableDiffusionReady: false },
+        settings: { stableDiffusionReady: false, enableLocalAi: false },
       });
     }
-  }, [dispatch, state.settings.stableDiffusionPath, state.settings.stableDiffusionReady, state.settings.stableDiffusionVersion]);
+  }, [
+    dispatch,
+    state.settings.enableLocalAi,
+    state.settings.preferProcedural,
+    state.settings.stableDiffusionModel,
+    state.settings.stableDiffusionModelSource,
+    state.settings.stableDiffusionPath,
+    state.settings.stableDiffusionReady,
+    state.settings.stableDiffusionVersion,
+  ]);
+
+  useEffect(() => {
+    if (state.settings.stableDiffusionModel && !selectedSuggestion) {
+      setCustomModelName(state.settings.stableDiffusionModel);
+    } else if (!state.settings.stableDiffusionModel && customModelName) {
+      setCustomModelName('');
+    }
+  }, [customModelName, selectedSuggestion, state.settings.stableDiffusionModel]);
 
   useEffect(() => {
     if (localRuntime?.logs?.length) {
@@ -73,7 +115,7 @@ export function AIGeneratorPanel() {
       setStatus(
         `Sprite generated via ${
           result.source === 'local'
-            ? 'local Stable Diffusion pipeline'
+            ? `local Stable Diffusion pipeline (${effectiveModelName})`
             : result.source === 'remote'
               ? 'remote endpoint'
               : 'procedural synthesizer'
@@ -103,7 +145,9 @@ export function AIGeneratorPanel() {
       setGifFrames(result.frames);
       setStatus(
         `Animated GIF ready via ${
-          result.source === 'local' ? 'local Stable Diffusion timeline' : 'procedural animator'
+          result.source === 'local'
+            ? `local Stable Diffusion timeline (${effectiveModelName})`
+            : 'procedural animator'
         }.`
       );
     } catch (error) {
@@ -123,6 +167,9 @@ export function AIGeneratorPanel() {
         version: state.settings.stableDiffusionVersion ?? '1.5',
         installPath: state.settings.stableDiffusionPath,
         autoDownload: state.settings.stableDiffusionAutoDownload,
+        preferredModel: state.settings.stableDiffusionModel ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID,
+        modelSource: state.settings.stableDiffusionModelSource ??
+          (state.settings.stableDiffusionModel ? 'custom' : 'suggested'),
         onProgress: (progress) => {
           setSetupPhase(progress.phase);
           setSetupProgress(progress.percent);
@@ -137,7 +184,10 @@ export function AIGeneratorPanel() {
           stableDiffusionReady: result.ready,
           stableDiffusionPath: result.path,
           stableDiffusionVersion: result.version,
+          stableDiffusionModel: result.model ?? state.settings.stableDiffusionModel,
+          stableDiffusionModelSource: result.modelSource ?? state.settings.stableDiffusionModelSource,
           enableLocalAi: result.ready ? true : state.settings.enableLocalAi,
+          preferProcedural: result.ready ? false : state.settings.preferProcedural,
         },
       });
       setSetupMessage(result.ready ? 'Stable Diffusion runtime ready.' : 'Setup incomplete. Check logs.');
@@ -154,10 +204,43 @@ export function AIGeneratorPanel() {
   };
 
   const runtimeStatus = state.settings.stableDiffusionReady
-    ? `Ready (v${state.settings.stableDiffusionVersion ?? localRuntime?.version ?? 'unknown'}) at ${
+    ? `Ready (v${state.settings.stableDiffusionVersion ?? localRuntime?.version ?? 'unknown'} · ${effectiveModelName}) at ${
         state.settings.stableDiffusionPath ?? localRuntime?.path ?? 'configured location'
       }`
     : 'Not installed';
+
+  const handleModelSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    if (value === 'custom') {
+      dispatch({
+        type: 'SET_SETTINGS',
+        settings: {
+          stableDiffusionModel: customModelName,
+          stableDiffusionModelSource: 'custom',
+        },
+      });
+      return;
+    }
+    dispatch({
+      type: 'SET_SETTINGS',
+      settings: {
+        stableDiffusionModel: value,
+        stableDiffusionModelSource: 'suggested',
+      },
+    });
+  };
+
+  const handleCustomModelChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setCustomModelName(value);
+    dispatch({
+      type: 'SET_SETTINGS',
+      settings: {
+        stableDiffusionModel: value,
+        stableDiffusionModelSource: 'custom',
+      },
+    });
+  };
 
   return (
     <div className="ai-panel">
@@ -212,6 +295,45 @@ export function AIGeneratorPanel() {
           />
         </label>
         <div className="panel-subheader">Local Stable Diffusion Runtime</div>
+        <div className="model-selection">
+          <label className="field">
+            Recommended models
+            <select value={selectedOptionValue} onChange={handleModelSelectionChange}>
+              {POPULAR_STABLE_DIFFUSION_MODELS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name} · ★ {model.rating.toFixed(1)}
+                </option>
+              ))}
+              <option value="custom">Custom model...</option>
+            </select>
+          </label>
+          {(selectedOptionValue === 'custom' || !selectedSuggestion) && (
+            <label className="field">
+              Custom model identifier
+              <input
+                type="text"
+                placeholder="e.g. my-hero-mix-v7"
+                value={customModelName}
+                onChange={handleCustomModelChange}
+              />
+            </label>
+          )}
+          {selectedSuggestion && selectedOptionValue !== 'custom' && (
+            <div className="model-suggestion">
+              <div className="model-suggestion__header">
+                <span className="model-suggestion__title">{selectedSuggestion.name}</span>
+                <span className="model-suggestion__rating">★ {selectedSuggestion.rating.toFixed(1)}</span>
+              </div>
+              <p className="model-suggestion__description">{selectedSuggestion.description}</p>
+              <div className="model-suggestion__meta">Curated by {selectedSuggestion.author}</div>
+              <div className="model-suggestion__tags">
+                {selectedSuggestion.tags.map((tag) => (
+                  <span key={tag} className="model-suggestion__tag">#{tag}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <label className="field inline">
           Use local Stable Diffusion
           <input
