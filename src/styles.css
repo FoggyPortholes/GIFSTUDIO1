@@ -343,6 +343,8 @@ textarea, input {
 .brush-controls {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .scale-control {
