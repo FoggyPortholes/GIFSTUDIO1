@@ -1,4 +1,4 @@
-# Gif Studio — Spicy Pickle (Lite Debug Edition) v1.3.0
+# Gif Studio — Spicy Pickle (Lite Debug Edition) v1.3.1
 
 This package contains the full app source and one‑click launchers for Windows (PowerShell and BAT).
 First run downloads **Node.js portable** automatically, installs dependencies, and opens the app.
@@ -14,7 +14,18 @@ First run downloads **Node.js portable** automatically, installs dependencies, a
 - GIF validator (checks header `GIF87a/89a` and trailer `;`).
 - Palette fix (first frame includes `{ palette }`).
 - One-click launch with transcript logs in `logs/`.
+- `npm run test:gif` encodes a synthetic animation in Node and saves it to `public/animation.gif`.
 - Auto-downloads Node.js portable v20.17.0 (x64) and **flattens** the folder so `npm.cmd` is found.
+
+## Testing
+
+```bash
+npm install
+npm run build
+npm run test:gif
+```
+
+The Node test writes `public/animation.gif` which you can inspect in any image viewer.
 
 ## Troubleshooting
 - If launch fails, delete the `node-portable/` folder and run `launch.ps1` again.

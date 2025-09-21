@@ -1,4 +1,4 @@
-Gif Studio — Spicy Pickle (Lite Debug) v1.3.0
+Gif Studio — Spicy Pickle (Lite Debug) v1.3.1
 ====================================================
 - One-click Windows launch (PowerShell + BAT)
 - Portable Node.js auto-download + flattened folder
@@ -7,3 +7,4 @@ Gif Studio — Spicy Pickle (Lite Debug) v1.3.0
 - Test GIF generator (red→blue)
 - GIF validator (header/trailer)
 - Palette fix on first frame
+- Node GIF smoke test (`npm run test:gif`) writes `public/animation.gif`
