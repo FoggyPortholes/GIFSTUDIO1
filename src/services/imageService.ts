@@ -62,18 +62,14 @@ export async function generateGif(files: File[], delay = 200) {
     return id;
   });
 
-  const palette = quantize(frames[0].data, 256);
-  log('DEBUG', 'palette created', { length: palette.length });
+  frames.forEach((frame, idx) => {
+    const palette = quantize(frame.data, 256);
+    log('DEBUG', 'palette created', { frame: idx, length: palette.length });
 
-  const idx0 = applyPalette(frames[0].data, palette);
-  writeFrame(w, h, idx0, { palette, delay });
-  log('DEBUG', 'wrote first frame', { indices: idx0.length });
-
-  for (let i = 1; i < frames.length; i++) {
-    const idx = applyPalette(frames[i].data, palette);
-    writeFrame(w, h, idx, { delay });
-    log('DEBUG', 'wrote frame', { i, indices: idx.length });
-  }
+    const indices = applyPalette(frame.data, palette);
+    writeFrame(w, h, indices, { palette, delay });
+    log('DEBUG', 'wrote frame', { idx, indices: indices.length });
+  });
 
   const buffer = finish();
   const u8 = new Uint8Array(buffer);
@@ -105,12 +101,13 @@ export async function testGif() {
   ctx.fillRect(0, 0, w, h);
   const f2 = ctx.getImageData(0, 0, w, h);
 
-  const palette = quantize(f1.data, 256);
-  const idx1 = applyPalette(f1.data, palette);
-  writeFrame(w, h, idx1, { palette, delay });
+  const palette1 = quantize(f1.data, 256);
+  const idx1 = applyPalette(f1.data, palette1);
+  writeFrame(w, h, idx1, { palette: palette1, delay });
 
-  const idx2 = applyPalette(f2.data, palette);
-  writeFrame(w, h, idx2, { delay });
+  const palette2 = quantize(f2.data, 256);
+  const idx2 = applyPalette(f2.data, palette2);
+  writeFrame(w, h, idx2, { palette: palette2, delay });
 
   const buffer = finish();
   const u8 = new Uint8Array(buffer);
