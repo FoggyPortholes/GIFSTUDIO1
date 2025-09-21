@@ -19,13 +19,31 @@ type SetupOptions = {
 
 let stableDiffusionState: StableDiffusionState | null = null;
 
+function normalizeSegment(segment: string, separator: '/' | '\\'): string {
+  if (separator === '\\') {
+    return segment.replace(/\//g, '\\');
+  }
+
+  return segment.replace(/[\\]+/g, '/');
+}
+
 function joinPaths(base: string, suffix: string): string {
   const trimmedBase = base.replace(/[\\/]+$/, '');
   const trimmedSuffix = suffix.replace(/^[\\/]+/, '');
-  if (!trimmedSuffix) {
-    return trimmedBase;
+
+  if (!trimmedBase) {
+    return trimmedSuffix;
   }
-  return `${trimmedBase}/${trimmedSuffix}`;
+
+  const baseUsesBackslash = trimmedBase.includes('\\') && !trimmedBase.includes('/');
+  const separator: '/' | '\\' = baseUsesBackslash ? '\\' : '/';
+
+  if (!trimmedSuffix) {
+    return normalizeSegment(trimmedBase, separator);
+  }
+
+  const normalizedSuffix = normalizeSegment(trimmedSuffix, separator);
+  return `${normalizeSegment(trimmedBase, separator)}${separator}${normalizedSuffix}`;
 }
 
 function resolveHomeDirectory(): string | undefined {
