@@ -78,7 +78,6 @@ async function testLocalGenerationWithoutPersistentStorage() {
   const settings: StudioSettings = {
     preferProcedural: false,
     enableLocalAi: true,
-    stableDiffusionAutoDownload: true,
     stableDiffusionReady: true,
     stableDiffusionVersion: '1.5',
     stableDiffusionPath: '/mock/path',
@@ -117,7 +116,7 @@ async function testSetupPersistsStateInMemory() {
 
   const result = await aiService.setupLocalStableDiffusion({
     version: '2.0',
-    autoDownload: true,
+    installPath: '/opt/stable-diffusion',
     onProgress: () => undefined,
   });
 
@@ -126,6 +125,11 @@ async function testSetupPersistsStateInMemory() {
   expect(state, 'Expected Stable Diffusion state to be available in memory');
   expectEqual(state?.ready ?? false, true, 'Expected Stable Diffusion runtime to be marked ready');
   expectEqual(state?.version ?? '', '2.0', 'Expected stored version to match the requested one');
+  expectEqual(
+    state?.path ?? '',
+    '/opt/stable-diffusion',
+    'Expected stored path to match the manually selected directory'
+  );
   expectEqual(
     state?.model ?? '',
     DEFAULT_STABLE_DIFFUSION_MODEL_ID,
@@ -165,7 +169,6 @@ async function testSetupExpandsInstallPath() {
 
   const result = await aiService.setupLocalStableDiffusion({
     version: '3.0',
-    autoDownload: true,
     installPath: '~/custom-models',
     onProgress: () => undefined,
   });
@@ -204,7 +207,6 @@ async function testProceduralFallbackWhenDisabled() {
   const settings: StudioSettings = {
     preferProcedural: false,
     enableLocalAi: true,
-    stableDiffusionAutoDownload: true,
     stableDiffusionReady: false,
     stableDiffusionVersion: '1.5',
     stableDiffusionPath: '/mock/path',

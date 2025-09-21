@@ -34,7 +34,7 @@ interface AIGifResponse {
   source: AIImageSource;
 }
 
-type StableDiffusionSetupPhase = 'checking' | 'downloading' | 'installing' | 'ready';
+type StableDiffusionSetupPhase = 'checking' | 'ready';
 
 export interface StableDiffusionSetupProgress {
   phase: StableDiffusionSetupPhase;
@@ -54,14 +54,12 @@ export interface StableDiffusionSetupResult {
 export interface StableDiffusionSetupOptions {
   version: string;
   installPath?: string;
-  autoDownload: boolean;
   onProgress?: (progress: StableDiffusionSetupProgress) => void;
   preferredModel?: string;
   modelSource?: StableDiffusionModelSource;
 }
 
 export interface StableDiffusionState extends StableDiffusionSetupResult {
-  autoDownload: boolean;
   lastUpdated: number;
 }
 
@@ -209,12 +207,10 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
   logInfo('Stable Diffusion setup started', {
     version: options.version,
     installPath: options.installPath,
-    autoDownload: options.autoDownload,
     preferredModel: options.preferredModel,
     modelSource: options.modelSource,
   });
 
-  const path = resolveStableDiffusionInstallPath(options.version, options.installPath);
   const existing = loadStableDiffusionState();
   const trimmedModel = options.preferredModel?.trim();
   const normalizedModel = trimmedModel && trimmedModel.length > 0 ? trimmedModel : undefined;
@@ -225,6 +221,16 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
   const resolvedSource: StableDiffusionModelSource = normalizedModel
     ? options.modelSource ?? (preferredSuggestion ? 'suggested' : 'custom')
     : existing?.modelSource ?? (resolvedSuggestion ? 'suggested' : 'custom');
+
+  const targetPath = options.installPath ?? existing?.path;
+  const trimmedPath = targetPath?.trim();
+  if (!trimmedPath) {
+    const message = 'Select a Stable Diffusion installation directory before continuing.';
+    report('ready', 100, message);
+    throw new Error(message);
+  }
+
+  const path = resolveStableDiffusionInstallPath(options.version, trimmedPath);
 
   report('checking', 5, 'Validating existing Stable Diffusion installation...');
   await delay(150);
@@ -268,103 +274,36 @@ export async function setupLocalStableDiffusion(options: StableDiffusionSetupOpt
     return result;
   }
 
-  if (!options.autoDownload) {
-    const friendly = resolvedSuggestion?.name ?? resolvedModel;
-    report(
-      'ready',
-      100,
-      `Manual installation marked as ready. Provide your own runtime for ${friendly} at the specified path.`
-    );
-    const state: StableDiffusionState = {
-      ready: true,
-      version: options.version,
-      path,
-      autoDownload: options.autoDownload,
-      lastUpdated: Date.now(),
-      logs,
-      model: resolvedModel,
-      modelSource: resolvedSource,
-    };
-    persistStableDiffusionState(state);
-    const result = {
-      ready: state.ready,
-      version: state.version,
-      path: state.path,
-      logs,
-      model: state.model,
-      modelSource: state.modelSource,
-    };
-    logInfo('Stable Diffusion manual setup marked as ready', {
-      version: result.version,
-      path: result.path,
-      model: result.model,
-      modelSource: result.modelSource,
-    });
-    return result;
-  }
+  const friendly = resolvedSuggestion?.name ?? resolvedModel;
+  report('checking', 45, `Using Stable Diffusion assets from ${path}.`);
+  await delay(200);
+  report('ready', 100, `Stable Diffusion runtime ready at ${path} with ${friendly}.`);
 
-  try {
-    report('downloading', 25, 'Downloading Stable Diffusion weights (~4 GB simulated)...');
-    await delay(800);
-    report('downloading', 55, 'Fetching VAE and text encoder assets...');
-    await delay(650);
-    report('installing', 85, 'Installing Python dependencies and optimizers...');
-    await delay(720);
-    const friendly = resolvedSuggestion?.name ?? resolvedModel;
-    report('ready', 100, `Stable Diffusion runtime prepared locally with ${friendly}.`);
-
-    const state: StableDiffusionState = {
-      ready: true,
-      version: options.version,
-      path,
-      autoDownload: options.autoDownload,
-      lastUpdated: Date.now(),
-      logs,
-      model: resolvedModel,
-      modelSource: resolvedSource,
-    };
-    persistStableDiffusionState(state);
-    const result = {
-      ready: state.ready,
-      version: state.version,
-      path: state.path,
-      logs,
-      model: state.model,
-      modelSource: state.modelSource,
-    };
-    logInfo('Stable Diffusion assets downloaded', {
-      version: result.version,
-      path: result.path,
-      model: result.model,
-      modelSource: result.modelSource,
-    });
-    return result;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const friendly = resolvedSuggestion?.name ?? resolvedModel;
-    report('ready', 100, `Setup failed for ${friendly}: ${message}`);
-    const state: StableDiffusionState = {
-      ready: false,
-      version: options.version,
-      path,
-      autoDownload: options.autoDownload,
-      lastUpdated: Date.now(),
-      logs,
-      model: resolvedModel,
-      modelSource: resolvedSource,
-    };
-    persistStableDiffusionState(state);
-    const result = {
-      ready: false,
-      version: options.version,
-      path,
-      logs,
-      model: state.model,
-      modelSource: state.modelSource,
-    };
-    logError('Stable Diffusion setup error', { error, version: result.version, path: result.path });
-    return result;
-  }
+  const state: StableDiffusionState = {
+    ready: true,
+    version: options.version,
+    path,
+    lastUpdated: Date.now(),
+    logs,
+    model: resolvedModel,
+    modelSource: resolvedSource,
+  };
+  persistStableDiffusionState(state);
+  const result = {
+    ready: state.ready,
+    version: state.version,
+    path: state.path,
+    logs,
+    model: state.model,
+    modelSource: state.modelSource,
+  };
+  logInfo('Stable Diffusion directory configured', {
+    version: result.version,
+    path: result.path,
+    model: result.model,
+    modelSource: result.modelSource,
+  });
+  return result;
 }
 
 function hashPrompt(prompt: string, seed = 0) {

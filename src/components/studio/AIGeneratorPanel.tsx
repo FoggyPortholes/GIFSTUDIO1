@@ -286,22 +286,30 @@ export function AIGeneratorPanel() {
   };
 
   const handleSetupStableDiffusion = async () => {
+    const targetPath = state.settings.stableDiffusionPath ?? localRuntime?.path;
+    const trimmedPath = targetPath?.trim();
+    if (!trimmedPath) {
+      const message = 'Choose a Stable Diffusion directory before continuing.';
+      setSetupLogs((logs) => [...logs, message]);
+      setSetupMessage(message);
+      setSetupPhase('ready');
+      setSetupProgress(0);
+      return;
+    }
     setIsSettingUp(true);
     setSetupLogs([]);
     setSetupProgress(10);
     setSetupPhase('checking');
-    setSetupMessage('Preparing local runtime...');
+    setSetupMessage('Validating Stable Diffusion directory...');
     logInfo('Stable Diffusion setup requested', {
       version: state.settings.stableDiffusionVersion ?? '1.5',
-      installPath: state.settings.stableDiffusionPath,
-      autoDownload: state.settings.stableDiffusionAutoDownload,
+      installPath: trimmedPath,
       preferredModel: state.settings.stableDiffusionModel ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID,
     });
     try {
       const result = await setupLocalStableDiffusion({
         version: state.settings.stableDiffusionVersion ?? '1.5',
-        installPath: state.settings.stableDiffusionPath,
-        autoDownload: state.settings.stableDiffusionAutoDownload,
+        installPath: trimmedPath,
         preferredModel: state.settings.stableDiffusionModel ?? DEFAULT_STABLE_DIFFUSION_MODEL_ID,
         modelSource: state.settings.stableDiffusionModelSource ??
           (state.settings.stableDiffusionModel ? 'custom' : 'suggested'),
@@ -338,8 +346,12 @@ export function AIGeneratorPanel() {
       });
     } catch (error) {
       logError('Stable Diffusion setup failed', { error });
-      setSetupMessage('Failed to configure Stable Diffusion');
-      setSetupLogs((logs) => [...logs, 'Setup failed. Please verify your configuration.']);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to configure Stable Diffusion. Please verify your directory.';
+      setSetupMessage(message);
+      setSetupLogs((logs) => [...logs, message]);
       setSetupPhase('ready');
       logWarn('Stable Diffusion setup encountered an error');
     } finally {
@@ -351,7 +363,9 @@ export function AIGeneratorPanel() {
     ? `Ready (v${state.settings.stableDiffusionVersion ?? localRuntime?.version ?? 'unknown'} · ${effectiveModelName}) at ${
         state.settings.stableDiffusionPath ?? localRuntime?.path ?? 'configured location'
       }`
-    : 'Not installed';
+    : state.settings.stableDiffusionPath
+      ? `Directory selected: ${state.settings.stableDiffusionPath}`
+      : 'Not configured';
 
   const handleModelSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
@@ -489,19 +503,6 @@ export function AIGeneratorPanel() {
           />
         </label>
         <label className="field inline">
-          Auto download assets
-          <input
-            type="checkbox"
-            checked={state.settings.stableDiffusionAutoDownload}
-            onChange={(event) =>
-              dispatch({
-                type: 'SET_SETTINGS',
-                settings: { stableDiffusionAutoDownload: event.target.checked },
-              })
-            }
-          />
-        </label>
-        <label className="field inline">
           Stable Diffusion version
           <input
             type="text"
@@ -538,7 +539,7 @@ export function AIGeneratorPanel() {
         </div>
         <div className="runtime-actions">
           <button onClick={handleSetupStableDiffusion} disabled={isSettingUp}>
-            {isSettingUp ? 'Configuring...' : 'Download & Configure Stable Diffusion'}
+            {isSettingUp ? 'Configuring...' : 'Use Selected Stable Diffusion Directory'}
           </button>
         </div>
         {(isSettingUp || setupProgress > 0) && (

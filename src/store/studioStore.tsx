@@ -360,7 +360,6 @@ function createDefaultSettings(): StudioSettings {
   return {
     preferProcedural: true,
     enableLocalAi: false,
-    stableDiffusionAutoDownload: true,
     stableDiffusionReady: false,
     stableDiffusionPath: undefined,
     stableDiffusionVersion: undefined,
