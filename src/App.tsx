@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GIFEncoder, applyPalette, quantize } from 'gifenc';
+import type { GifFrame } from './lib/encoder-gifjs';
+import { encodeGif } from './lib/encoder-gifjs';
+import { ensureFirstFrameHasPalette } from './lib/palette';
+import { isValidGif } from './lib/gif-validator';
+import { downloadBytes } from './lib/download';
+import { getLogs, log } from './lib/logs';
 
 import './styles.css';
 
@@ -18,7 +23,6 @@ type ValidatorResult = {
 };
 
 type GifArtifact = {
-  blob: Blob;
   url: string;
   bytes: Uint8Array;
 };
@@ -26,25 +30,6 @@ type GifArtifact = {
 const WIDTH = 96;
 const HEIGHT = 64;
 const DELAY_MS = 220;
-
-function encodeTestFrames(): Uint8Array {
-  const encoder = GIFEncoder();
-  const frames = [createGradientFrame('#ff1b2d', '#ffb347'), createGradientFrame('#2b6cff', '#0dd0ff')];
-
-  frames.forEach((rgba, index) => {
-    const palette = quantize(rgba, 256);
-    const paletteIndex = applyPalette(rgba, palette);
-    encoder.writeFrame(paletteIndex, WIDTH, HEIGHT, {
-      delay: DELAY_MS,
-      palette,
-      ...(index === 0 ? { repeat: 0 } : {}),
-    });
-  });
-
-  encoder.finish();
-  const bytes = encoder.bytesView();
-  return new Uint8Array(bytes);
-}
 
 function createGradientFrame(startHex: string, endHex: string): Uint8ClampedArray {
   const start = hexToRgb(startHex);
@@ -80,6 +65,20 @@ function hexToRgb(hex: string) {
   };
 }
 
+function buildGradientFrames(): GifFrame[] {
+  const frames = [
+    createGradientFrame('#ff1b2d', '#ffb347'),
+    createGradientFrame('#2b6cff', '#0dd0ff'),
+  ];
+
+  return frames.map((rgba) => ({
+    rgba,
+    width: WIDTH,
+    height: HEIGHT,
+    delayMs: DELAY_MS,
+  }));
+}
+
 function analyzeGif(bytes: Uint8Array): ValidatorResult {
   const headerBytes = bytes.slice(0, 6);
   const header = String.fromCharCode(...headerBytes);
@@ -110,15 +109,6 @@ function formatTimestamp(date: Date) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function App() {
   const [activeTab, setActiveTab] = useState<'studio' | 'debug'>('studio');
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -127,6 +117,7 @@ export default function App() {
   const [isEncoding, setIsEncoding] = useState(false);
 
   const pushLog = useCallback((message: string) => {
+    log(message);
     setLogs((entries) => [
       ...entries,
       {
@@ -141,23 +132,30 @@ export default function App() {
     pushLog('Gif Studio ready. Generate a test GIF to begin.');
   }, [pushLog]);
 
-  const generateGif = useCallback(() => {
+  const generateGif = useCallback(async () => {
     setIsEncoding(true);
     pushLog('Starting red → blue gradient encode…');
     try {
-      const bytes = encodeTestFrames();
-      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-      const blob = new Blob([buffer], { type: 'image/gif' });
+      const frames = buildGradientFrames();
+      const prepared = ensureFirstFrameHasPalette(frames, []);
+      const result = await encodeGif(prepared, { loop: 0, workers: 2, quality: 10 });
+
+      if (!isValidGif(result.bytes)) {
+        pushLog('Invalid GIF detected.');
+        return;
+      }
+
+      const blob = new Blob([result.bytes], { type: 'image/gif' });
       const url = URL.createObjectURL(blob);
 
       setLastGif((current) => {
         if (current) {
           URL.revokeObjectURL(current.url);
         }
-        return { blob, url, bytes };
+        return { url, bytes: result.bytes };
       });
 
-      const analysis = analyzeGif(bytes);
+      const analysis = analyzeGif(result.bytes);
       setValidatorResult(analysis);
 
       pushLog(`GIF completed (${analysis.byteLength.toLocaleString()} bytes).`);
@@ -181,6 +179,9 @@ export default function App() {
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
       const analysis = analyzeGif(bytes);
+      if (!isValidGif(bytes)) {
+        pushLog('Uploaded GIF failed validation.');
+      }
       setValidatorResult(analysis);
       pushLog(`Header: ${analysis.header}, Trailer OK: ${analysis.hasValidTrailer ? 'yes' : 'no'}.`);
       if (analysis.globalPaletteSize) {
@@ -198,8 +199,9 @@ export default function App() {
   );
 
   const handleDownloadLogs = useCallback(() => {
-    const blob = new Blob([logText || 'No logs recorded.'], { type: 'text/plain' });
-    downloadBlob(blob, 'gif-studio-logs.txt');
+    const history = getLogs() || (logText || 'No logs recorded.');
+    const encoder = new TextEncoder();
+    downloadBytes('gif-studio-logs.txt', encoder.encode(history), 'text/plain');
   }, [logText]);
 
   const handleDownloadGif = useCallback(() => {
@@ -207,7 +209,7 @@ export default function App() {
       pushLog('No GIF available to download.');
       return;
     }
-    downloadBlob(lastGif.blob, 'last-animation.gif');
+    downloadBytes('last-animation.gif', lastGif.bytes, 'image/gif');
     pushLog('Last GIF downloaded.');
   }, [lastGif, pushLog]);
 
@@ -259,7 +261,7 @@ export default function App() {
                   <h2 id="encoder-heading">Test GIF Generator</h2>
                   <p>Create a two-frame animation that blends from red to blue, then preview and validate the output.</p>
                 </div>
-                <button type="button" className="primary" onClick={generateGif} disabled={isEncoding}>
+                <button type="button" className="primary" onClick={() => void generateGif()} disabled={isEncoding}>
                   {isEncoding ? 'Encoding…' : 'Test GIF'}
                 </button>
               </header>
