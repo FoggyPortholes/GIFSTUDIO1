@@ -2,14 +2,14 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { log, setLastGif } from './logger';
 
 function ascii(bytes: Uint8Array, count = 6) {
-  return Array.from(bytes.slice(0, count)).map(b => String.fromCharCode(b)).join('');
+  return Array.from(bytes.slice(0, count)).map((b) => String.fromCharCode(b)).join('');
 }
 function validateGif(buf: Uint8Array) {
   if (buf.byteLength < 8) return { ok: false, reason: 'buffer too small' };
   const head = ascii(buf, 6);
   const last = buf[buf.byteLength - 1];
   const okHeader = head === 'GIF89a' || head === 'GIF87a';
-  const okTrailer = last === 0x3B; // ';'
+  const okTrailer = last === 0x3b; // ';'
   return { ok: okHeader && okTrailer, reason: `head=${head} trailer=${last}` };
 }
 
@@ -28,8 +28,10 @@ async function filesToBitmaps(files: File[]): Promise<ImageBitmap[]> {
         el.src = URL.createObjectURL(f);
       });
       const canvas = document.createElement('canvas');
-      canvas.width = img.width; canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context unavailable');
       ctx.drawImage(img, 0, 0);
       const bmp = await createImageBitmap(canvas);
       results.push(bmp);
@@ -38,11 +40,21 @@ async function filesToBitmaps(files: File[]): Promise<ImageBitmap[]> {
   return results;
 }
 
+function frameToIndexedData(ctx: CanvasRenderingContext2D, bmp: ImageBitmap, width: number, height: number) {
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(bmp, 0, 0, width, height);
+  const frame = ctx.getImageData(0, 0, width, height);
+  const palette = quantize(frame.data, 256);
+  const index = applyPalette(frame.data, palette);
+  return { palette, index };
+}
+
 export async function generateGif(files: File[], delay = 200) {
   log('INFO', 'generateGif start', { count: files.length, delay });
   if (!files || files.length === 0) throw new Error('No files provided');
 
   const bitmaps = await filesToBitmaps(files);
+  if (bitmaps.length === 0) throw new Error('Unable to decode any images');
   const w = bitmaps[0].width;
   const h = bitmaps[0].height;
   log('DEBUG', 'bitmap dims', { width: w, height: h, frames: bitmaps.length });
@@ -51,35 +63,28 @@ export async function generateGif(files: File[], delay = 200) {
   const { writeFrame, finish } = enc;
 
   const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
 
-  const frames: ImageData[] = bitmaps.map((bmp, idx) => {
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(bmp, 0, 0, w, h);
-    const id = ctx.getImageData(0, 0, w, h);
-    log('DEBUG', 'captured frame', { idx, byteLength: id.data.byteLength });
-    return id;
+  bitmaps.forEach((bmp, idx) => {
+    const { palette, index } = frameToIndexedData(ctx, bmp, w, h);
+    const options = idx === 0 ? { palette, delay, repeat: 0 } : { palette, delay };
+    writeFrame(index, w, h, options);
+    log('DEBUG', 'wrote frame', { idx, palette: palette.length, indices: index.length });
   });
-
-  const palette = quantize(frames[0].data, 256);
-  log('DEBUG', 'palette created', { length: palette.length });
-
-  const idx0 = applyPalette(frames[0].data, palette);
-  writeFrame(w, h, idx0, { palette, delay });
-  log('DEBUG', 'wrote first frame', { indices: idx0.length });
-
-  for (let i = 1; i < frames.length; i++) {
-    const idx = applyPalette(frames[i].data, palette);
-    writeFrame(w, h, idx, { delay });
-    log('DEBUG', 'wrote frame', { i, indices: idx.length });
-  }
 
   const buffer = finish();
   const u8 = new Uint8Array(buffer);
   setLastGif(u8);
   const val = validateGif(u8);
-  log('INFO', 'finished GIF', { bytes: u8.byteLength, head: ascii(u8, 6), last: u8[u8.byteLength - 1], valid: val.ok });
+  log('INFO', 'finished GIF', {
+    bytes: u8.byteLength,
+    head: ascii(u8, 6),
+    last: u8[u8.byteLength - 1],
+    valid: val.ok,
+  });
 
   if (!val.ok) throw new Error('Invalid GIF: ' + val.reason);
 
@@ -89,28 +94,31 @@ export async function generateGif(files: File[], delay = 200) {
 
 export async function testGif() {
   log('INFO', 'testGif start');
-  const w = 64, h = 64, delay = 400;
+  const w = 64;
+  const h = 64;
+  const delay = 400;
   const enc = GIFEncoder();
   const { writeFrame, finish } = enc;
 
   const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
 
   ctx.fillStyle = 'red';
   ctx.fillRect(0, 0, w, h);
-  const f1 = ctx.getImageData(0, 0, w, h);
+  let frame = ctx.getImageData(0, 0, w, h);
+  let palette = quantize(frame.data, 256);
+  let index = applyPalette(frame.data, palette);
+  writeFrame(index, w, h, { palette, delay, repeat: 0 });
 
   ctx.fillStyle = 'blue';
   ctx.fillRect(0, 0, w, h);
-  const f2 = ctx.getImageData(0, 0, w, h);
-
-  const palette = quantize(f1.data, 256);
-  const idx1 = applyPalette(f1.data, palette);
-  writeFrame(w, h, idx1, { palette, delay });
-
-  const idx2 = applyPalette(f2.data, palette);
-  writeFrame(w, h, idx2, { delay });
+  frame = ctx.getImageData(0, 0, w, h);
+  palette = quantize(frame.data, 256);
+  index = applyPalette(frame.data, palette);
+  writeFrame(index, w, h, { palette, delay });
 
   const buffer = finish();
   const u8 = new Uint8Array(buffer);

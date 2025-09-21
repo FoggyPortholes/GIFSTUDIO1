@@ -11,7 +11,7 @@ export default function App() {
   return (
     <div>
       <div className="bar">
-        <h1 style={{margin:0}}>Gif Studio — Spicy Pickle (Debug) v1.3.0</h1>
+        <h1 style={{margin:0}}>Gif Studio — Spicy Pickle (Debug) v1.3.1</h1>
       </div>
       <nav style={{marginTop:12}}>
         <button onClick={() => setTab('generate')}>Generate</button>
