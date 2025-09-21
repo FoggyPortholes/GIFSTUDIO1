@@ -2,4 +2,5 @@ node_modules/
 logs/
 public/animation.gif
 dist/
+build-tests/
 *.log

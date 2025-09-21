@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "outDir": "build-tests",
+    "noEmit": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "sourceMap": false
+  },
+  "include": [
+    "src/services/aiService.ts",
+    "src/utils/**/*.ts",
+    "src/types.ts",
+    "src/types/**/*.d.ts",
+    "tests/stableDiffusionIntegration.test.ts"
+  ]
+}
