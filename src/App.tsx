@@ -132,6 +132,18 @@ export default function App() {
     pushLog('Gif Studio ready. Generate a test GIF to begin.');
   }, [pushLog]);
 
+  const logValidatorInsights = useCallback(
+    (analysis: ValidatorResult) => {
+      pushLog(`Header: ${analysis.header}, Trailer OK: ${analysis.hasValidTrailer ? 'yes' : 'no'}.`);
+      if (analysis.globalPaletteSize) {
+        pushLog(`Global palette detected with ${analysis.globalPaletteSize} colors.`);
+      } else {
+        pushLog('Warning: no global palette detected in first frame.');
+      }
+    },
+    [pushLog],
+  );
+
   const generateGif = useCallback(async () => {
     setIsEncoding(true);
     pushLog('Starting red → blue gradient encode…');
@@ -159,19 +171,14 @@ export default function App() {
       setValidatorResult(analysis);
 
       pushLog(`GIF completed (${analysis.byteLength.toLocaleString()} bytes).`);
-      pushLog(`Header: ${analysis.header}, Trailer OK: ${analysis.hasValidTrailer ? 'yes' : 'no'}.`);
-      if (analysis.globalPaletteSize) {
-        pushLog(`Global palette detected with ${analysis.globalPaletteSize} colors.`);
-      } else {
-        pushLog('Warning: no global palette detected in first frame.');
-      }
+      logValidatorInsights(analysis);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       pushLog(`Encoding failed: ${message}`);
     } finally {
       setIsEncoding(false);
     }
-  }, [pushLog]);
+  }, [logValidatorInsights, pushLog]);
 
   const validateFromFile = useCallback(
     async (file: File) => {
@@ -183,14 +190,9 @@ export default function App() {
         pushLog('Uploaded GIF failed validation.');
       }
       setValidatorResult(analysis);
-      pushLog(`Header: ${analysis.header}, Trailer OK: ${analysis.hasValidTrailer ? 'yes' : 'no'}.`);
-      if (analysis.globalPaletteSize) {
-        pushLog(`Global palette detected with ${analysis.globalPaletteSize} colors.`);
-      } else {
-        pushLog('Warning: no global palette detected in first frame.');
-      }
+      logValidatorInsights(analysis);
     },
-    [pushLog],
+    [logValidatorInsights, pushLog],
   );
 
   const logText = useMemo(
