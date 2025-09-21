@@ -54,6 +54,7 @@ export interface StableDiffusionState extends StableDiffusionSetupResult {
 }
 
 const STABLE_DIFFUSION_STORAGE_KEY = 'pixel-persona-stable-diffusion-state';
+let inMemoryStableDiffusionState: StableDiffusionState | null = null;
 
 function getStorage() {
   try {
@@ -69,19 +70,26 @@ function getStorage() {
 
 function loadStableDiffusionState(): StableDiffusionState | null {
   const storage = getStorage();
-  if (!storage) return null;
-  const raw = storage.getItem(STABLE_DIFFUSION_STORAGE_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as StableDiffusionState;
-  } catch (error) {
-    console.warn('Failed to parse Stable Diffusion state', error);
-    return null;
+  if (storage) {
+    const raw = storage.getItem(STABLE_DIFFUSION_STORAGE_KEY);
+    if (!raw) {
+      return inMemoryStableDiffusionState;
+    }
+    try {
+      const parsed = JSON.parse(raw) as StableDiffusionState;
+      inMemoryStableDiffusionState = parsed;
+      return parsed;
+    } catch (error) {
+      console.warn('Failed to parse Stable Diffusion state', error);
+      return inMemoryStableDiffusionState;
+    }
   }
+  return inMemoryStableDiffusionState;
 }
 
 function persistStableDiffusionState(state: StableDiffusionState) {
   const storage = getStorage();
+  inMemoryStableDiffusionState = state;
   if (!storage) return;
   storage.setItem(STABLE_DIFFUSION_STORAGE_KEY, JSON.stringify(state));
 }
@@ -399,7 +407,7 @@ async function callLocalStableDiffusion(request: AIRequest): Promise<AIImageResp
     return null;
   }
   const state = loadStableDiffusionState();
-  if (!state || !state.ready) {
+  if (state && !state.ready) {
     return null;
   }
   await delay(200);

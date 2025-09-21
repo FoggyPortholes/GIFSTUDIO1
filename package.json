@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "test:gif": "node tests/encode_node.mjs"
+    "test:gif": "node tests/encode_node.mjs",
+    "test:ai": "tsc -p tsconfig.test.json && node build-tests/tests/stableDiffusionIntegration.test.js"
   },
   "dependencies": {
     "gifenc": "^1.0.2",
