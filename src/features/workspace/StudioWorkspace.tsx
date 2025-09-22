@@ -7,6 +7,7 @@ import { useStudioActions } from '../studio/useStudioActions';
 import { TimelinePanel } from '../timeline/TimelinePanel';
 import { FrameUploader } from '../uploader/FrameUploader';
 import { Toast } from '../ui/Toast';
+import { SpriteSheetExportPanel } from '../export/SpriteSheetExportPanel';
 import { encodeGif } from '../../lib/gif-encoder';
 import { loadFrame, revokeFrame } from '../../lib/load-frame';
 import type { FrameAsset } from '../../types';
@@ -316,6 +317,11 @@ export const StudioWorkspace = () => {
             onSettingsChange={updateExportSettings}
             onExport={handleExport}
             isExporting={isExporting}
+          />
+          <SpriteSheetExportPanel
+            frames={frames}
+            disabled={isExporting}
+            onToast={showToast}
           />
         </section>
       </div>

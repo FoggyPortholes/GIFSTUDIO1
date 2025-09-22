@@ -613,6 +613,81 @@ button:disabled {
   gap: 12px;
 }
 
+.sprite-export {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sprite-template-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sprite-template-upload input {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  color: inherit;
+}
+
+.sprite-template-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.sprite-template-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sprite-template-summary dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.sprite-template-summary dd {
+  margin: 0;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.sprite-template-note {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.78);
+}
+
+.sprite-template-note.is-error {
+  color: #fda4af;
+  font-weight: 600;
+}
+
+.sprite-template-placeholder {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.7);
+}
+
+.sprite-template-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sprite-template-error {
+  margin: 0;
+  color: #fda4af;
+  font-weight: 600;
+}
+
 button.ghost {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.35);
