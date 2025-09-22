@@ -1,6 +1,12 @@
 :root {
   color-scheme: light dark;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   background-color: #050816;
   color: #e2e8f0;
 }
@@ -12,9 +18,9 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 55%),
-    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.14), transparent 55%),
-    #050816;
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.14), transparent 55%), #050816;
 }
 
 button,
@@ -194,7 +200,10 @@ button:disabled {
   border-radius: 18px;
   border: 2px dashed rgba(148, 163, 184, 0.35);
   color: rgba(226, 232, 240, 0.85);
-  transition: border 0.25s ease, background 0.25s ease, transform 0.25s ease;
+  transition:
+    border 0.25s ease,
+    background 0.25s ease,
+    transform 0.25s ease;
 }
 
 .uploader input {
@@ -266,7 +275,9 @@ button:disabled {
   border: 1px solid rgba(100, 116, 139, 0.28);
   border-radius: 16px;
   padding: 12px;
-  transition: border 0.2s ease, transform 0.2s ease;
+  transition:
+    border 0.2s ease,
+    transform 0.2s ease;
 }
 
 .timeline-item.is-active {
@@ -439,7 +450,10 @@ button:disabled {
   border: 1px solid rgba(148, 163, 184, 0.25);
   cursor: pointer;
   pointer-events: auto;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .sheet-cell:hover {
@@ -517,6 +531,34 @@ button:disabled {
   gap: 8px;
   font-size: 0.85rem;
   color: rgba(203, 213, 225, 0.75);
+}
+
+.sheet-character {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.sheet-character strong {
+  display: block;
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+.sheet-character p {
+  margin: 4px 0 0;
+  color: rgba(203, 213, 225, 0.78);
+  font-size: 0.9rem;
+}
+
+.sheet-character .ghost {
+  align-self: center;
+  white-space: nowrap;
 }
 
 .sheet-manual-actions .ghost {
@@ -700,7 +742,9 @@ button.ghost {
   color: #e2e8f0;
   border-radius: 10px;
   padding: 6px 12px;
-  transition: border 0.2s ease, transform 0.2s ease;
+  transition:
+    border 0.2s ease,
+    transform 0.2s ease;
 }
 
 button.ghost:hover:not(:disabled) {
