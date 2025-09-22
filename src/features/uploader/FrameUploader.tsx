@@ -1,7 +1,11 @@
 import { useCallback, useState, type ChangeEvent, type DragEvent } from 'react';
 
+import type { FrameAsset } from '../../types';
+import { SpriteSheetImporter } from './SpriteSheetImporter';
+
 interface FrameUploaderProps {
   onFiles: (files: File[]) => void;
+  onFrames?: (frames: FrameAsset[], meta?: { sourceName?: string }) => void;
   disabled?: boolean;
 }
 
@@ -23,8 +27,9 @@ const filterAcceptedFiles = (fileList: FileList | null) => {
   });
 };
 
-export const FrameUploader = ({ onFiles, disabled = false }: FrameUploaderProps) => {
+export const FrameUploader = ({ onFiles, onFrames, disabled = false }: FrameUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isSpriteSheetOpen, setSpriteSheetOpen] = useState(false);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -97,6 +102,26 @@ export const FrameUploader = ({ onFiles, disabled = false }: FrameUploaderProps)
           <span>or click to browse PNG, JPG, WEBP, or GIF files</span>
         </div>
       </label>
+      <div className="uploader-actions">
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setSpriteSheetOpen(true)}
+          disabled={disabled}
+        >
+          Import Sprite Sheet
+        </button>
+      </div>
+      {isSpriteSheetOpen ? (
+        <SpriteSheetImporter
+          disabled={disabled}
+          onCancel={() => setSpriteSheetOpen(false)}
+          onImport={(frames, meta) => {
+            onFrames?.(frames, meta);
+            setSpriteSheetOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 };
