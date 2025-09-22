@@ -20,10 +20,7 @@ npm install
 npm run dev
 ```
 
-> **Note:** The `npm run dev` helper checks your local Node.js version. If it is older than 18 it
-> automatically falls back to the bundled `node-portable` runtime (Node 20) so Windows users can
-> start the app without adjusting their global installation. If you would rather opt-in manually,
-> run `node scripts/launch.js dev:vite`.
+
 
 Build production assets with:
 
