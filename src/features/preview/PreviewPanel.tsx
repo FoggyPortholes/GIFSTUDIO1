@@ -1,82 +1,97 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useStudio } from '../studio/StudioContext';
 
-import type { FrameAsset, PlaybackSettings } from '../../types';
+const MIN_DELAY = 40;
+const MAX_DELAY = 600;
 
-interface PreviewPanelProps {
-  frames: FrameAsset[];
-  currentIndex: number;
-  playback: PlaybackSettings;
-  isPlaying: boolean;
-  onTogglePlay: () => void;
-  onDelayChange: (delay: number) => void;
-  onLoopChange: (loop: boolean) => void;
-}
+export const PreviewPanel = () => {
+  const { frames, playback, setPlayback } = useStudio();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
 
-export const PreviewPanel = ({
-  frames,
-  currentIndex,
-  playback,
-  isPlaying,
-  onTogglePlay,
-  onDelayChange,
-  onLoopChange,
-}: PreviewPanelProps) => {
-  const currentFrame = frames[currentIndex];
-  const controlsDisabled = frames.length === 0;
-  const delayLabel = useMemo(() => `${playback.delay} ms`, [playback.delay]);
+  useEffect(() => {
+    setActiveIndex(0);
+    setIsPlaying(frames.length > 0);
+  }, [frames.length]);
+
+  useEffect(() => {
+    if (!isPlaying || frames.length === 0) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setActiveIndex((current) => {
+        const next = current + 1;
+        if (next < frames.length) {
+          return next;
+        }
+        if (playback.loop) {
+          return 0;
+        }
+        window.clearInterval(interval);
+        setIsPlaying(false);
+        return current;
+      });
+    }, Math.max(MIN_DELAY, playback.delay));
+
+    return () => window.clearInterval(interval);
+  }, [frames.length, isPlaying, playback.delay, playback.loop]);
+
+  const durationLabel = useMemo(() => {
+    const seconds = Math.max(0, (frames.length * playback.delay) / 1000);
+    return seconds.toFixed(2);
+  }, [frames.length, playback.delay]);
+
+  const currentFrame = frames[activeIndex];
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>Preview</h2>
-        <p>Test playback speed and looping before exporting.</p>
-      </div>
-      <div className="preview">
+    <section className="panel">
+      <header className="panel__header">
+        <div>
+          <p className="eyebrow">Preview</p>
+          <h2>Review timing & looping</h2>
+        </div>
+        <div className="panel__header-actions">
+          <button
+            type="button"
+            className="button"
+            onClick={() => setIsPlaying((value) => !value)}
+            disabled={!frames.length}
+          >
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => setPlayback({ loop: !playback.loop })}
+            disabled={!frames.length}
+          >
+            {playback.loop ? 'Looping' : 'Play once'}
+          </button>
+        </div>
+      </header>
+
+      <div className="preview__stage">
         {currentFrame ? (
-          <img
-            key={currentFrame.id}
-            src={currentFrame.url}
-            alt={currentFrame.name}
-            className="preview-image"
-          />
+          <img src={currentFrame.url} alt={currentFrame.name} />
         ) : (
-          <div className="panel-empty" role="status">
-            <p>Add at least one frame to unlock playback controls.</p>
-          </div>
+          <p className="empty-state">Add frames to see the animation preview.</p>
         )}
       </div>
-      <div className="preview-controls">
-        <button
-          type="button"
-          className="primary-action"
-          onClick={onTogglePlay}
-          disabled={frames.length <= 1}
-        >
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-        <label className="preview-slider">
-          <span>Delay</span>
+
+      <div className="preview__controls">
+        <label className="control">
+          <span>Frame delay: {playback.delay}ms</span>
           <input
             type="range"
-            min={20}
-            max={1000}
-            step={10}
+            min={MIN_DELAY}
+            max={MAX_DELAY}
             value={playback.delay}
-            onChange={(event) => onDelayChange(Number(event.target.value))}
-            disabled={controlsDisabled}
+            onChange={(event) => setPlayback({ delay: Number(event.target.value) })}
           />
-          <span>{delayLabel}</span>
         </label>
-        <label className="preview-checkbox">
-          <input
-            type="checkbox"
-            checked={playback.loop}
-            onChange={(event) => onLoopChange(event.target.checked)}
-            disabled={controlsDisabled}
-          />
-          <span>Loop playback</span>
-        </label>
+        <p className="preview__summary">Total duration: {durationLabel}s</p>
       </div>
-    </div>
+    </section>
   );
 };

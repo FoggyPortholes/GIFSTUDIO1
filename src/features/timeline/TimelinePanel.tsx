@@ -1,102 +1,67 @@
-import type { FrameAsset } from '../../types';
+import { useStudio } from '../studio/StudioContext';
 
-interface TimelinePanelProps {
-  frames: FrameAsset[];
-  currentId: string | null;
-  onSelect: (id: string) => void;
-  onMove: (id: string, targetIndex: number) => void;
-  onRemove: (id: string) => void;
-  onClear: () => void;
-}
-
-export const TimelinePanel = ({
-  frames,
-  currentId,
-  onSelect,
-  onMove,
-  onRemove,
-  onClear,
-}: TimelinePanelProps) => {
-  if (!frames.length) {
-    return (
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Timeline</h2>
-          <p>Import at least one frame to begin arranging your animation.</p>
-        </div>
-        <div className="panel-empty" role="status">
-          <p>No frames yet. Drop images above to get started.</p>
-        </div>
-      </div>
-    );
-  }
+export const TimelinePanel = () => {
+  const { frames, moveFrame, removeFrame, clearFrames } = useStudio();
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>Timeline</h2>
-        <div className="panel-actions">
-          <button type="button" className="ghost" onClick={onClear}>
-            Clear All
-          </button>
+    <section className="panel">
+      <header className="panel__header">
+        <div>
+          <p className="eyebrow">Timeline</p>
+          <h2>Sequence your story</h2>
         </div>
-      </div>
-      <ul className="timeline" role="list">
-        {frames.map((frame, index) => {
-          const isActive = frame.id === currentId;
-          const previousIndex = index - 1;
-          const nextIndex = index + 1;
-          return (
-            <li key={frame.id} className={`timeline-item${isActive ? ' is-active' : ''}`}>
-              <button
-                type="button"
-                className="timeline-thumb"
-                onClick={() => onSelect(frame.id)}
-                aria-pressed={isActive}
-              >
-                <img src={frame.url} alt={frame.name} loading="lazy" />
-                <span className="timeline-index">{index + 1}</span>
-              </button>
-              <div className="timeline-meta">
-                <span className="timeline-name" title={frame.name}>
-                  {frame.name}
-                </span>
-                <span className="timeline-size">
-                  {frame.width}×{frame.height}
-                </span>
+        <button className="button button--ghost" type="button" onClick={clearFrames} disabled={!frames.length}>
+          Clear all
+        </button>
+      </header>
+
+      {frames.length === 0 ? (
+        <p className="empty-state">Import frames to start arranging your animation.</p>
+      ) : (
+        <ol className="timeline__list">
+          {frames.map((frame, index) => (
+            <li key={frame.id} className="timeline__item">
+              <figure className="timeline__preview">
+                <img src={frame.url} alt={frame.name} />
+              </figure>
+              <div className="timeline__meta">
+                <p className="timeline__name">{frame.name}</p>
+                <p className="timeline__details">
+                  {frame.width}×{frame.height}px
+                </p>
               </div>
-              <div className="timeline-controls">
+              <div className="timeline__actions">
                 <button
                   type="button"
-                  className="ghost"
-                  onClick={() => onMove(frame.id, previousIndex)}
-                  disabled={previousIndex < 0}
+                  className="icon-button"
                   aria-label="Move frame earlier"
+                  disabled={index === 0}
+                  onClick={() => moveFrame(frame.id, -1)}
                 >
                   ↑
                 </button>
                 <button
                   type="button"
-                  className="ghost"
-                  onClick={() => onMove(frame.id, nextIndex)}
-                  disabled={nextIndex >= frames.length}
+                  className="icon-button"
                   aria-label="Move frame later"
+                  disabled={index === frames.length - 1}
+                  onClick={() => moveFrame(frame.id, 1)}
                 >
                   ↓
                 </button>
                 <button
                   type="button"
-                  className="danger"
-                  onClick={() => onRemove(frame.id)}
+                  className="icon-button icon-button--danger"
                   aria-label="Remove frame"
+                  onClick={() => removeFrame(frame.id)}
                 >
-                  Remove
+                  ×
                 </button>
               </div>
             </li>
-          );
-        })}
-      </ul>
-    </div>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 };

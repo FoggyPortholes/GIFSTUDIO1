@@ -1,111 +1,125 @@
-import { useCallback, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import type { ChangeEvent, DragEvent } from 'react';
+import { useStudio } from '../studio/StudioContext';
 
-import type { FrameAsset } from '../../types';
-import { SpriteSheetImporter } from './SpriteSheetImporter';
+const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
-interface FrameUploaderProps {
-  onFiles: (files: File[]) => void;
-  onFrames?: (frames: FrameAsset[], meta?: { sourceName?: string }) => void;
-  disabled?: boolean;
-}
+const describeFiles = (count: number) => {
+  if (!count) {
+    return 'No frames yet';
+  }
+  if (count === 1) {
+    return '1 frame ready';
+  }
+  return `${count} frames ready`;
+};
 
-const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
-
-export const FrameUploader = ({ onFiles, onFrames, disabled = false }: FrameUploaderProps) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isSpriteSheetOpen, setSpriteSheetOpen] = useState(false);
+export const FrameUploader = () => {
+  const { addFiles, frames, isImporting } = useStudio();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragActive, setDragActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files?.length) {
+    async (fileList: FileList | null) => {
+      if (!fileList?.length) {
         return;
       }
-      onFiles(Array.from(files));
+      const files = Array.from(fileList);
+      const accepted = files.filter((file) => {
+        if (!file.type) {
+          return true;
+        }
+        return ACCEPTED_TYPES.includes(file.type.toLowerCase());
+      });
+      const rejected = files.length - accepted.length;
+      if (!accepted.length) {
+        setError('Unsupported file type. Please drop PNG, JPG, WEBP, or GIF images.');
+        return;
+      }
+      setError(rejected ? `${rejected} file(s) were skipped due to unsupported formats.` : null);
+      await addFiles(accepted);
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
     },
-    [onFiles]
+    [addFiles],
   );
 
-  const handleInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      handleFiles(event.target.files);
-      event.target.value = '';
+  const onInputChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      try {
+        await handleFiles(event.target.files);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Unable to import frames.');
+      }
     },
-    [handleFiles]
+    [handleFiles],
   );
 
-  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    if (disabled) {
-      return;
-    }
+  const onDrop = useCallback(
+    async (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDragActive(false);
+      try {
+        await handleFiles(event.dataTransfer?.files ?? null);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Unable to import frames.');
+      }
+    },
+    [handleFiles],
+  );
+
+  const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = 'copy';
-    setIsDragging(true);
-  }, [disabled]);
-
-  const handleDragLeave = useCallback(() => {
-    setIsDragging(false);
+    setDragActive(true);
   }, []);
 
-  const handleDrop = useCallback(
-    (event: DragEvent<HTMLLabelElement>) => {
-      if (disabled) {
-        return;
-      }
-      event.preventDefault();
-      setIsDragging(false);
-      handleFiles(event.dataTransfer.files);
-    },
-    [disabled, handleFiles]
-  );
+  const onDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+  }, []);
+
+  const onBrowse = useCallback(() => {
+    inputRef.current?.click();
+  }, []);
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>Frames</h2>
-        <p>Upload still images, then arrange and preview them before exporting your animation.</p>
-      </div>
-      <label
-        className={`uploader${disabled ? ' is-disabled' : ''}${isDragging ? ' is-dragging' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
+    <section className="panel">
+      <header className="panel__header">
+        <div>
+          <p className="eyebrow">Import</p>
+          <h2>Bring in your frames</h2>
+        </div>
+        <button className="button" type="button" onClick={onBrowse} disabled={isImporting}>
+          Browse files
+        </button>
         <input
+          ref={inputRef}
           type="file"
           accept={ACCEPTED_TYPES.join(',')}
           multiple
-          onChange={handleInputChange}
-          disabled={disabled}
-          aria-disabled={disabled}
+          className="uploader__input"
+          onChange={onInputChange}
         />
-        <div className="uploader-icon" aria-hidden>
-          <span>⬆</span>
-        </div>
-        <div className="uploader-text">
-          <strong>Drop images here</strong>
-          <span>or click to browse PNG, JPG, WEBP, or GIF files</span>
-        </div>
-      </label>
-      <div className="uploader-actions">
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => setSpriteSheetOpen(true)}
-          disabled={disabled}
-        >
-          Import Sprite Sheet
-        </button>
+      </header>
+
+      <div
+        className={`uploader__dropzone${isDragActive ? ' uploader__dropzone--active' : ''}`}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+      >
+        <p className="uploader__title">Drop PNG, JPG, WEBP, or GIF files here</p>
+        <p className="uploader__subtitle">{describeFiles(frames.length)}</p>
       </div>
-      {isSpriteSheetOpen ? (
-        <SpriteSheetImporter
-          disabled={disabled}
-          onCancel={() => setSpriteSheetOpen(false)}
-          onImport={(frames, meta) => {
-            onFrames?.(frames, meta);
-            setSpriteSheetOpen(false);
-          }}
-        />
-      ) : null}
-    </div>
+
+      {error && <p className="uploader__error">{error}</p>}
+      {isImporting && <p className="uploader__status">Loading frames…</p>}
+    </section>
   );
 };
