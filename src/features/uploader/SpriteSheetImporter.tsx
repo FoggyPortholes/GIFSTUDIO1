@@ -391,7 +391,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
           width: image.naturalWidth,
           height: image.naturalHeight,
         });
-        setFrameWidth(image.naturalHeight || 64);
+        setFrameWidth(image.naturalWidth || 64);
         setFrameHeight(image.naturalHeight || 64);
         setStartFrame(1);
         setEndFrame(null);
