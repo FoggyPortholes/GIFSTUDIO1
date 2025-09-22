@@ -43,10 +43,13 @@ const sliceSpriteSheet = async (
   sheet: SheetData,
   frameWidth: number,
   frameHeight: number,
-  startFrame: number,
-  endFrame: number,
+  frameIndexes: number[],
   columns: number
 ): Promise<FrameAsset[]> => {
+  if (!frameIndexes.length) {
+    return [];
+  }
+
   const canvas = document.createElement('canvas');
   canvas.width = frameWidth;
   canvas.height = frameHeight;
@@ -58,7 +61,7 @@ const sliceSpriteSheet = async (
   const frames: FrameAsset[] = [];
   const baseName = getBaseName(sheet.file.name) || 'sprite';
 
-  for (let index = startFrame - 1; index < endFrame; index += 1) {
+  for (const index of frameIndexes) {
     const column = index % columns;
     const row = Math.floor(index / columns);
     const sourceX = column * frameWidth;
@@ -106,6 +109,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
   const [frameHeight, setFrameHeight] = useState(64);
   const [startFrame, setStartFrame] = useState(1);
   const [endFrame, setEndFrame] = useState<number | null>(null);
+  const [selectedFrames, setSelectedFrames] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -160,6 +164,40 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     return columns * rows;
   }, [columns, rows]);
 
+  const normalizedEnd = useMemo(() => {
+    if (!maxFrames) {
+      return null;
+    }
+    return endFrame ?? maxFrames;
+  }, [endFrame, maxFrames]);
+
+  const hasManualSelection = selectedFrames.size > 0;
+
+  const defaultSelectedFrames = useMemo(() => {
+    if (!normalizedEnd) {
+      return new Set<number>();
+    }
+    const frames = new Set<number>();
+    for (let frame = startFrame; frame <= normalizedEnd; frame += 1) {
+      frames.add(frame);
+    }
+    return frames;
+  }, [normalizedEnd, startFrame]);
+
+  const selectionCount = useMemo(() => {
+    if (hasManualSelection) {
+      return selectedFrames.size;
+    }
+    if (!normalizedEnd) {
+      return 0;
+    }
+    return Math.max(normalizedEnd - startFrame + 1, 0);
+  }, [hasManualSelection, normalizedEnd, selectedFrames, startFrame]);
+
+  useEffect(() => {
+    setSelectedFrames(new Set());
+  }, [sheet?.url, frameWidth, frameHeight]);
+
   useEffect(() => {
     if (!maxFrames) {
       return;
@@ -206,6 +244,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
         setFrameHeight(image.naturalHeight || 64);
         setStartFrame(1);
         setEndFrame(null);
+        setSelectedFrames(new Set());
       };
 
       image.onerror = () => {
@@ -233,7 +272,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     }
 
     const targetEnd = endFrame ?? maxFrames;
-    if (startFrame > targetEnd) {
+    if (!hasManualSelection && startFrame > targetEnd) {
       setError('Start frame must be less than or equal to the end frame.');
       return;
     }
@@ -241,7 +280,20 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     setIsProcessing(true);
     setError(null);
     try {
-      const frames = await sliceSpriteSheet(sheet, frameWidth, frameHeight, startFrame, targetEnd, columns);
+      const frameNumbers = hasManualSelection
+        ? Array.from(selectedFrames).sort((a, b) => a - b)
+        : Array.from({ length: targetEnd - startFrame + 1 }, (_, offset) => startFrame + offset);
+
+      const indexes = frameNumbers
+        .map((frame) => frame - 1)
+        .filter((index) => index >= 0 && index < maxFrames);
+
+      if (!frameNumbers.length || !indexes.length) {
+        setError('Select at least one frame to import.');
+        return;
+      }
+
+      const frames = await sliceSpriteSheet(sheet, frameWidth, frameHeight, indexes, columns);
       if (!frames.length) {
         setError('No frames could be created from the provided settings.');
         return;
@@ -253,7 +305,47 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     } finally {
       setIsProcessing(false);
     }
-  }, [columns, endFrame, frameHeight, frameWidth, maxFrames, onImport, rows, sheet, startFrame]);
+  }, [
+    columns,
+    endFrame,
+    frameHeight,
+    frameWidth,
+    hasManualSelection,
+    maxFrames,
+    onImport,
+    rows,
+    selectedFrames,
+    sheet,
+    startFrame,
+  ]);
+
+  const handleToggleFrame = useCallback(
+    (frameNumber: number) => {
+      if (isProcessing) {
+        return;
+      }
+      setSelectedFrames((current) => {
+        const next = new Set(current);
+        if (!next.size && defaultSelectedFrames.size) {
+          defaultSelectedFrames.forEach((frame) => next.add(frame));
+        }
+        if (next.has(frameNumber)) {
+          next.delete(frameNumber);
+        } else {
+          next.add(frameNumber);
+        }
+        return next;
+      });
+    },
+    [defaultSelectedFrames, isProcessing]
+  );
+
+  const handleClearSelection = useCallback(() => {
+    if (isProcessing) {
+      return;
+    }
+    setSelectedFrames(new Set());
+  }, [isProcessing]);
 
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true">
@@ -273,8 +365,41 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
         </label>
         {sheet ? (
           <div className="sheet-body">
-            <div className="sheet-preview" role="img" aria-label={`Sprite sheet preview (${sheet.width} by ${sheet.height})`}>
-              <img src={sheet.url} alt="Sprite sheet preview" />
+            <div
+              className="sheet-preview"
+              role="group"
+              aria-label={`Sprite sheet preview (${sheet.width} by ${sheet.height})`}
+            >
+              <div className="sheet-preview-frame">
+                <img src={sheet.url} alt="Sprite sheet preview" />
+                {columns && rows ? (
+                  <div
+                    className="sheet-cell-grid"
+                    style={{
+                      gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                      gridTemplateRows: `repeat(${rows}, 1fr)`,
+                    }}
+                  >
+                    {Array.from({ length: maxFrames }, (_, index) => {
+                      const frameNumber = index + 1;
+                      const isActive = hasManualSelection
+                        ? selectedFrames.has(frameNumber)
+                        : defaultSelectedFrames.has(frameNumber);
+                      return (
+                        <button
+                          type="button"
+                          key={frameNumber}
+                          className={`sheet-cell${isActive ? ' is-active' : ''}`}
+                          onClick={() => handleToggleFrame(frameNumber)}
+                          aria-label={`Frame ${frameNumber}`}
+                          aria-pressed={isActive}
+                          disabled={isProcessing}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className="sheet-form">
               <div className="sheet-grid">
@@ -325,6 +450,22 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
                   />
                 </label>
               </div>
+              <div className="sheet-manual-actions">
+                <p>
+                  Click frames in the preview to toggle manual selection. When frames are selected
+                  manually, the start/end range is ignored.
+                </p>
+                {hasManualSelection ? (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={handleClearSelection}
+                    disabled={isProcessing}
+                  >
+                    Clear manual selection
+                  </button>
+                ) : null}
+              </div>
               <dl className="sheet-summary">
                 <div>
                   <dt>Columns</dt>
@@ -337,6 +478,10 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
                 <div>
                   <dt>Total frames</dt>
                   <dd>{maxFrames}</dd>
+                </div>
+                <div>
+                  <dt>Selected</dt>
+                  <dd>{selectionCount}</dd>
                 </div>
               </dl>
             </div>
