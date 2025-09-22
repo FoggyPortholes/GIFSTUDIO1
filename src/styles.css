@@ -459,6 +459,87 @@ main {
   align-self: flex-start;
 }
 
+.sheet-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(100, 116, 139, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  font-size: 0.85rem;
+  color: rgba(203, 213, 225, 0.8);
+}
+
+.sheet-ai strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.sheet-ai p {
+  margin: 4px 0 0;
+}
+
+.sheet-ai.is-disabled {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.sheet-ai button {
+  align-self: flex-start;
+}
+
+.sheet-ai-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.75);
+}
+
+.sheet-ai-suggestion dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.sheet-ai-suggestion dt {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(203, 213, 225, 0.7);
+}
+
+.sheet-ai-suggestion dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sheet-ai-notes {
+  margin: 0;
+  color: rgba(148, 163, 184, 0.85);
+  font-size: 0.8rem;
+}
+
+.sheet-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sheet-ai-message {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.sheet-ai-message.is-error {
+  color: #fecaca;
+}
+
 .sheet-error {
   margin: 0;
   padding: 12px 14px;
