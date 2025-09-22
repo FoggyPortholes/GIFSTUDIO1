@@ -11,32 +11,16 @@ interface FrameUploaderProps {
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
 
-const filterAcceptedFiles = (fileList: FileList | null) => {
-  if (!fileList?.length) {
-    return [];
-  }
-  return Array.from(fileList).filter((file) => {
-    if (ACCEPTED_TYPES.includes(file.type)) {
-      return true;
-    }
-    if (!file.type && file.name) {
-      const name = file.name.toLowerCase();
-      return ['.png', '.jpg', '.jpeg', '.gif', '.webp'].some((ending) => name.endsWith(ending));
-    }
-    return false;
-  });
-};
-
 export const FrameUploader = ({ onFiles, onFrames, disabled = false }: FrameUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isSpriteSheetOpen, setSpriteSheetOpen] = useState(false);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
-      const accepted = filterAcceptedFiles(files);
-      if (accepted.length) {
-        onFiles(accepted);
+      if (!files?.length) {
+        return;
       }
+      onFiles(Array.from(files));
     },
     [onFiles]
   );
