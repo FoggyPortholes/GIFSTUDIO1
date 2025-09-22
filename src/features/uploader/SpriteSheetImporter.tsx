@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from 'react';
 
 import type { FrameAsset } from '../../types';
 import { createId } from '../../lib/id';
@@ -176,6 +184,68 @@ const getBaseName = (name: string) => {
   return name.slice(0, index);
 };
 
+const ACCEPTED_SHEET_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+]);
+
+const SHEET_EXTENSION_PATTERN = /\.(png|jpe?g|webp|gif)$/i;
+
+const BASIC_SPRITE_CONFIG = {
+  frameWidth: 64,
+  frameHeight: 64,
+  columns: 2,
+  rows: 2,
+  name: 'basic-sprite-sheet.png',
+};
+
+const BASIC_SPRITE_COLOURS = ['#f97316', '#22d3ee', '#a855f7', '#facc15'];
+
+const createBasicSpriteSheetFile = async (): Promise<File> => {
+  if (typeof document === 'undefined') {
+    throw new Error('Document is not available in this environment.');
+  }
+  const { frameWidth, frameHeight, columns, rows, name } = BASIC_SPRITE_CONFIG;
+  const width = frameWidth * columns;
+  const height = frameHeight * rows;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Canvas rendering is not supported in this browser.');
+  }
+  context.clearRect(0, 0, width, height);
+
+  let colourIndex = 0;
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const colour = BASIC_SPRITE_COLOURS[colourIndex % BASIC_SPRITE_COLOURS.length];
+      const x = column * frameWidth;
+      const y = row * frameHeight;
+      context.fillStyle = colour;
+      context.fillRect(x, y, frameWidth, frameHeight);
+      context.strokeStyle = 'rgba(15, 23, 42, 0.35)';
+      context.lineWidth = 6;
+      context.strokeRect(x + 3, y + 3, frameWidth - 6, frameHeight - 6);
+      context.fillStyle = 'rgba(15, 23, 42, 0.35)';
+      context.fillRect(x, y + frameHeight - 12, frameWidth, 12);
+      context.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      context.font = 'bold 24px system-ui, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(String(colourIndex + 1), x + frameWidth / 2, y + frameHeight / 2);
+      colourIndex += 1;
+    }
+  }
+
+  const blob = await toBlob(canvas);
+  return new File([blob], name, { type: 'image/png' });
+};
+
 const sliceSpriteSheet = async (
   sheet: SheetData,
   frameWidth: number,
@@ -241,6 +311,8 @@ const sliceSpriteSheet = async (
 
 export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: SpriteSheetImporterProps) => {
   const isMountedRef = useRef(true);
+  const hasLoadedDefaultRef = useRef(false);
+  const loadRequestIdRef = useRef(0);
   const [sheet, setSheet] = useState<SheetData | null>(null);
   const [frameWidth, setFrameWidth] = useState(64);
   const [frameHeight, setFrameHeight] = useState(64);
@@ -253,6 +325,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<AiSliceSuggestion | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -361,14 +434,21 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     }
   }, [maxFrames, startFrame, endFrame]);
 
-  const handleFileChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const nextFile = event.target.files?.[0];
-      if (!nextFile) {
+  const loadSheetFile = useCallback(
+    (file: File, options?: { frameWidth?: number; frameHeight?: number; endFrame?: number }) => {
+      const isSupportedType =
+        ACCEPTED_SHEET_TYPES.has(file.type) || SHEET_EXTENSION_PATTERN.test(file.name);
+      if (!isSupportedType) {
+        setError('Unsupported file type. Choose a PNG, JPG, WEBP, or GIF sprite sheet.');
+        setAiSuggestion(null);
+        setAiError(null);
         return;
       }
 
       setError(null);
+      setAiSuggestion(null);
+      setAiError(null);
+      setSelectedFrames(new Set());
       setSheet((current) => {
         if (current) {
           URL.revokeObjectURL(current.url);
@@ -376,33 +456,33 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
         return null;
       });
 
-      const url = URL.createObjectURL(nextFile);
+      const requestId = loadRequestIdRef.current + 1;
+      loadRequestIdRef.current = requestId;
+
+      const url = URL.createObjectURL(file);
       const image = new Image();
 
       image.onload = () => {
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || loadRequestIdRef.current !== requestId) {
           URL.revokeObjectURL(url);
           return;
         }
         setSheet({
-          file: nextFile,
+          file,
           image,
           url,
           width: image.naturalWidth,
           height: image.naturalHeight,
         });
-        setFrameWidth(image.naturalWidth || 64);
-        setFrameHeight(image.naturalHeight || 64);
+        setFrameWidth(options?.frameWidth ?? (image.naturalWidth || 64));
+        setFrameHeight(options?.frameHeight ?? (image.naturalHeight || 64));
         setStartFrame(1);
-        setEndFrame(null);
-        setSelectedFrames(new Set());
-        setAiSuggestion(null);
-        setAiError(null);
+        setEndFrame(options?.endFrame ?? null);
       };
 
       image.onerror = () => {
         URL.revokeObjectURL(url);
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || loadRequestIdRef.current !== requestId) {
           return;
         }
         setError('Unable to load the selected sprite sheet.');
@@ -412,6 +492,82 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     },
     []
   );
+
+  const handleFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextFile = event.target.files?.[0];
+      if (nextFile) {
+        loadSheetFile(nextFile);
+      }
+      event.target.value = '';
+    },
+    [loadSheetFile]
+  );
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (disabled) {
+        return;
+      }
+      event.preventDefault();
+      setIsDragActive(false);
+      const file = event.dataTransfer.files?.[0];
+      if (file) {
+        loadSheetFile(file);
+      }
+    },
+    [disabled, loadSheetFile]
+  );
+
+  const handleDragOver = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (disabled) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      setIsDragActive(true);
+    },
+    [disabled]
+  );
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
+    const relatedTarget = event.relatedTarget as Node | null;
+    if (relatedTarget && event.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+    setIsDragActive(false);
+  }, []);
+
+  useEffect(() => {
+    if (hasLoadedDefaultRef.current || sheet) {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+    hasLoadedDefaultRef.current = true;
+    let isCancelled = false;
+    const loadDefault = async () => {
+      try {
+        const file = await createBasicSpriteSheetFile();
+        if (isCancelled) {
+          return;
+        }
+        loadSheetFile(file, {
+          frameWidth: BASIC_SPRITE_CONFIG.frameWidth,
+          frameHeight: BASIC_SPRITE_CONFIG.frameHeight,
+          endFrame: BASIC_SPRITE_CONFIG.columns * BASIC_SPRITE_CONFIG.rows,
+        });
+      } catch (defaultError) {
+        console.warn('Failed to load default sprite sheet', defaultError);
+      }
+    };
+    loadDefault();
+    return () => {
+      isCancelled = true;
+    };
+  }, [loadSheetFile, sheet]);
 
   const handleAiAssist = useCallback(async () => {
     if (!sheet) {
@@ -576,7 +732,14 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
           <h3>Import Sprite Sheet</h3>
           <p>Slice a single sprite sheet into multiple frames and add them to your timeline.</p>
         </div>
-        <label className="sheet-file" aria-disabled={disabled}>
+        <label
+          className={`sheet-file${disabled ? ' is-disabled' : ''}${isDragActive ? ' is-dragging' : ''}`}
+          aria-disabled={disabled}
+          onDragEnter={handleDragOver}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <span>Sprite sheet image</span>
           <input
             type="file"
@@ -591,6 +754,10 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
               className="sheet-preview"
               role="group"
               aria-label={`Sprite sheet preview (${sheet.width} by ${sheet.height})`}
+              onDragEnter={handleDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               <div className="sheet-preview-frame">
                 <img src={sheet.url} alt="Sprite sheet preview" />
