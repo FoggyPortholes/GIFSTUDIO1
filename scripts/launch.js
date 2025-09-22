@@ -175,16 +175,17 @@ function resolveNodeEnvironment(root) {
   if (portableNode) {
     const npm = resolveNpmForNode(portableNode);
     if (!npm) {
-      throw new Error('Found node-portable but npm was not located next to it.');
+      logWarn('Found node-portable but npm was not located next to it; falling back to system runtime.');
+    } else {
+      const env = { ...process.env };
+      env.PATH = buildPath(env.PATH, path.dirname(portableNode));
+      return {
+        label: 'portable',
+        nodePath: portableNode,
+        npm,
+        env
+      };
     }
-    const env = { ...process.env };
-    env.PATH = buildPath(env.PATH, path.dirname(portableNode));
-    return {
-      label: 'portable',
-      nodePath: portableNode,
-      npm,
-      env
-    };
   }
 
   const npm = resolveSystemNpm();
@@ -269,18 +270,17 @@ async function ensureDependencies(envObj, root) {
   });
 }
 
-function startDevServer(envObj, root, forwardedArgs) {
+function startDevServer(envObj, root, scriptName, scriptArgs) {
   return new Promise((resolve, reject) => {
-    const npmArgs = [...envObj.npm.args, 'run', 'dev'];
-    const viteArgs = forwardedArgs.length && forwardedArgs[0] === '--'
-      ? forwardedArgs.slice(1)
-      : forwardedArgs;
+    const npmArgs = [...envObj.npm.args, 'run', scriptName];
+    const hasDoubleDash = scriptArgs.length && scriptArgs[0] === '--';
+    const finalArgs = hasDoubleDash ? scriptArgs.slice(1) : scriptArgs;
 
-    if (viteArgs.length) {
-      npmArgs.push('--', ...viteArgs);
+    if (hasDoubleDash || finalArgs.length) {
+      npmArgs.push('--', ...finalArgs);
     }
 
-    log('Starting Vite dev server...');
+    log(`Starting npm run ${scriptName}...`);
     const prepared = prepareCommand(envObj.npm.command, npmArgs);
     const child = spawn(prepared.command, prepared.args, {
       cwd: root,
@@ -351,7 +351,15 @@ function startDevServer(envObj, root, forwardedArgs) {
     await ensureDependencies(envObj, repoRoot);
 
     const forwardedArgs = process.argv.slice(2);
-    const result = await startDevServer(envObj, repoRoot, forwardedArgs);
+    let scriptName = 'dev';
+    let scriptArgs = forwardedArgs;
+
+    if (scriptArgs.length && scriptArgs[0] !== '--') {
+      scriptName = scriptArgs[0];
+      scriptArgs = scriptArgs.slice(1);
+    }
+
+    const result = await startDevServer(envObj, repoRoot, scriptName, scriptArgs);
 
     if (result.signal) {
       logWarn(`Dev server exited due to signal ${result.signal}.`);
