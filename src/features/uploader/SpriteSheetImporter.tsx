@@ -10,6 +10,11 @@ import {
 
 import type { FrameAsset } from '../../types';
 import { createId } from '../../lib/id';
+import {
+  inferCharacterSheetLayout,
+  sliceCharacterSheet,
+  type CharacterSheetLayout,
+} from '../../lib/character-sheet';
 
 type ImportMeta = { sourceName?: string };
 
@@ -132,7 +137,12 @@ const parseAiSuggestion = (text: string, sheet: SheetData): AiSliceSuggestion =>
   const frameWidth = Number(parsed.frameWidth);
   const frameHeight = Number(parsed.frameHeight);
 
-  if (!Number.isFinite(frameWidth) || frameWidth <= 0 || !Number.isFinite(frameHeight) || frameHeight <= 0) {
+  if (
+    !Number.isFinite(frameWidth) ||
+    frameWidth <= 0 ||
+    !Number.isFinite(frameHeight) ||
+    frameHeight <= 0
+  ) {
     throw new Error('AI suggestion returned invalid frame dimensions.');
   }
 
@@ -140,7 +150,8 @@ const parseAiSuggestion = (text: string, sheet: SheetData): AiSliceSuggestion =>
   const fallbackRows = Math.max(1, Math.floor(sheet.height / frameHeight));
   const columnsRaw = Number(parsed.columns);
   const rowsRaw = Number(parsed.rows);
-  const columns = Number.isFinite(columnsRaw) && columnsRaw > 0 ? Math.round(columnsRaw) : fallbackColumns;
+  const columns =
+    Number.isFinite(columnsRaw) && columnsRaw > 0 ? Math.round(columnsRaw) : fallbackColumns;
   const rows = Number.isFinite(rowsRaw) && rowsRaw > 0 ? Math.round(rowsRaw) : fallbackRows;
 
   if (!columns || !rows) {
@@ -251,7 +262,7 @@ const sliceSpriteSheet = async (
   frameWidth: number,
   frameHeight: number,
   frameIndexes: number[],
-  columns: number
+  columns: number,
 ): Promise<FrameAsset[]> => {
   if (!frameIndexes.length) {
     return [];
@@ -288,7 +299,7 @@ const sliceSpriteSheet = async (
       0,
       0,
       frameWidth,
-      frameHeight
+      frameHeight,
     );
 
     const blob = await toBlob(canvas);
@@ -309,7 +320,11 @@ const sliceSpriteSheet = async (
   return frames;
 };
 
-export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: SpriteSheetImporterProps) => {
+export const SpriteSheetImporter = ({
+  disabled = false,
+  onCancel,
+  onImport,
+}: SpriteSheetImporterProps) => {
   const isMountedRef = useRef(true);
   const hasLoadedDefaultRef = useRef(false);
   const loadRequestIdRef = useRef(0);
@@ -326,6 +341,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
   const [aiSuggestion, setAiSuggestion] = useState<AiSliceSuggestion | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [characterLayout, setCharacterLayout] = useState<CharacterSheetLayout | null>(null);
 
   useEffect(() => {
     return () => {
@@ -364,6 +380,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
   useEffect(() => {
     setAiSuggestion(null);
     setAiError(null);
+    setCharacterLayout(null);
   }, [sheet?.url]);
 
   const columns = useMemo(() => {
@@ -467,17 +484,29 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
           URL.revokeObjectURL(url);
           return;
         }
-        setSheet({
+        const nextSheet: SheetData = {
           file,
           image,
           url,
           width: image.naturalWidth,
           height: image.naturalHeight,
-        });
-        setFrameWidth(options?.frameWidth ?? (image.naturalWidth || 64));
-        setFrameHeight(options?.frameHeight ?? (image.naturalHeight || 64));
-        setStartFrame(1);
-        setEndFrame(options?.endFrame ?? null);
+        };
+        setSheet(nextSheet);
+
+        const inferred = inferCharacterSheetLayout(image.naturalWidth, image.naturalHeight);
+        setCharacterLayout(inferred);
+
+        if (inferred) {
+          setFrameWidth(inferred.frameWidth);
+          setFrameHeight(inferred.frameHeight);
+          setStartFrame(1);
+          setEndFrame(inferred.totalFrames);
+        } else {
+          setFrameWidth(options?.frameWidth ?? (image.naturalWidth || 64));
+          setFrameHeight(options?.frameHeight ?? (image.naturalHeight || 64));
+          setStartFrame(1);
+          setEndFrame(options?.endFrame ?? null);
+        }
       };
 
       image.onerror = () => {
@@ -490,7 +519,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
 
       image.src = url;
     },
-    []
+    [],
   );
 
   const handleFileChange = useCallback(
@@ -501,7 +530,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
       }
       event.target.value = '';
     },
-    [loadSheetFile]
+    [loadSheetFile],
   );
 
   const handleDrop = useCallback(
@@ -516,7 +545,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
         loadSheetFile(file);
       }
     },
-    [disabled, loadSheetFile]
+    [disabled, loadSheetFile],
   );
 
   const handleDragOver = useCallback(
@@ -528,7 +557,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
       event.dataTransfer.dropEffect = 'copy';
       setIsDragActive(true);
     },
-    [disabled]
+    [disabled],
   );
 
   const handleDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
@@ -597,7 +626,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
           `Sheet width: ${sheet.width}`,
           `Sheet height: ${sheet.height}`,
           `Sprite sheet preview (data URL): ${preview}`,
-        ].join('\n')
+        ].join('\n'),
       );
       const text = extractAssistantText(response).trim();
       if (!text) {
@@ -635,7 +664,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
       setSelectedFrames(new Set());
       setAiError(null);
     },
-    [isProcessing]
+    [isProcessing],
   );
 
   const handleImport = useCallback(async () => {
@@ -697,6 +726,35 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
     startFrame,
   ]);
 
+  const handleAutoImport = useCallback(async () => {
+    if (!sheet) {
+      setError('Select a sprite sheet image to continue.');
+      return;
+    }
+    if (!characterLayout) {
+      setError('Unable to determine a character grid for this image.');
+      return;
+    }
+    setIsProcessing(true);
+    setError(null);
+    try {
+      const frames = await sliceCharacterSheet(sheet.image, sheet.file, characterLayout);
+      if (!frames.length) {
+        setError('No frames were generated from the character image.');
+        return;
+      }
+      onImport(frames, { sourceName: sheet.file.name });
+    } catch (autoError) {
+      const message =
+        autoError instanceof Error
+          ? autoError.message
+          : 'Unable to create frames from the character image.';
+      setError(message);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [characterLayout, onImport, sheet]);
+
   const handleToggleFrame = useCallback(
     (frameNumber: number) => {
       if (isProcessing) {
@@ -715,7 +773,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
         return next;
       });
     },
-    [defaultSelectedFrames, isProcessing]
+    [defaultSelectedFrames, isProcessing],
   );
 
   const handleClearSelection = useCallback(() => {
@@ -791,6 +849,25 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
               </div>
             </div>
             <div className="sheet-form">
+              {characterLayout ? (
+                <div className="sheet-character" role="status">
+                  <div>
+                    <strong>Character layout detected</strong>
+                    <p>
+                      {characterLayout.label} – {characterLayout.columns} × {characterLayout.rows}{' '}
+                      grid with {characterLayout.totalFrames} frames.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={handleAutoImport}
+                    disabled={isProcessing}
+                  >
+                    Import character sheet
+                  </button>
+                </div>
+              ) : null}
               <div className="sheet-grid">
                 <label>
                   <span>Frame width</span>
@@ -962,7 +1039,11 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
             </div>
           </div>
         ) : null}
-        {error ? <p className="sheet-error" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="sheet-error" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="sheet-actions">
           <button type="button" className="ghost" onClick={onCancel} disabled={isProcessing}>
             Cancel
