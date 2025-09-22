@@ -14,6 +14,15 @@ export const computeFit = (
   dstHeight: number,
   mode: FitMode
 ): FitBox => {
+  if (srcWidth <= 0 || srcHeight <= 0) {
+    return {
+      dx: 0,
+      dy: 0,
+      dw: dstWidth,
+      dh: dstHeight,
+    };
+  }
+
   if (mode === 'stretch') {
     return {
       dx: 0,
