@@ -19,6 +19,143 @@ interface SheetData {
   height: number;
 }
 
+interface WindowAiAssistantSession {
+  prompt: (input: string) => Promise<unknown>;
+  destroy?: () => Promise<void> | void;
+}
+
+interface WindowAiAssistant {
+  create: (options?: { instructions?: string }) => Promise<WindowAiAssistantSession>;
+}
+
+interface WindowWithAi extends Window {
+  ai?: {
+    assistant?: WindowAiAssistant;
+  };
+}
+
+interface AiSliceSuggestion {
+  frameWidth: number;
+  frameHeight: number;
+  columns: number;
+  rows: number;
+  confidence?: number;
+  notes?: string;
+}
+
+const getWindowAiAssistant = (): WindowAiAssistant | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const candidate = (window as WindowWithAi).ai?.assistant;
+  if (candidate && typeof candidate.create === 'function') {
+    return candidate;
+  }
+  return null;
+};
+
+const createPreviewDataUrl = (sheet: SheetData): string => {
+  const maxSide = 256;
+  const scale = Math.min(1, maxSide / Math.max(sheet.width, sheet.height));
+  const width = Math.max(1, Math.round(sheet.width * scale));
+  const height = Math.max(1, Math.round(sheet.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Canvas rendering is not supported in this browser.');
+  }
+  context.clearRect(0, 0, width, height);
+  context.drawImage(sheet.image, 0, 0, width, height);
+  return canvas.toDataURL('image/png');
+};
+
+const extractAssistantText = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+  const record = value as Record<string, unknown>;
+  const directKeys = ['text', 'output', 'message', 'response'];
+  for (const key of directKeys) {
+    const candidate = record[key];
+    if (typeof candidate === 'string') {
+      return candidate;
+    }
+  }
+  if (Array.isArray(record.choices)) {
+    for (const choice of record.choices) {
+      if (choice && typeof choice === 'object') {
+        const choiceRecord = choice as Record<string, unknown>;
+        if (typeof choiceRecord.text === 'string') {
+          return choiceRecord.text;
+        }
+        const message = choiceRecord.message as Record<string, unknown> | undefined;
+        if (message) {
+          const parts = ['content', 'text'];
+          for (const part of parts) {
+            const candidate = message[part];
+            if (typeof candidate === 'string') {
+              return candidate;
+            }
+          }
+        }
+      }
+    }
+  }
+  return JSON.stringify(value);
+};
+
+const parseAiSuggestion = (text: string, sheet: SheetData): AiSliceSuggestion => {
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('AI response did not include JSON output.');
+  }
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch {
+    throw new Error('Unable to parse AI response.');
+  }
+
+  const frameWidth = Number(parsed.frameWidth);
+  const frameHeight = Number(parsed.frameHeight);
+
+  if (!Number.isFinite(frameWidth) || frameWidth <= 0 || !Number.isFinite(frameHeight) || frameHeight <= 0) {
+    throw new Error('AI suggestion returned invalid frame dimensions.');
+  }
+
+  const fallbackColumns = Math.max(1, Math.floor(sheet.width / frameWidth));
+  const fallbackRows = Math.max(1, Math.floor(sheet.height / frameHeight));
+  const columnsRaw = Number(parsed.columns);
+  const rowsRaw = Number(parsed.rows);
+  const columns = Number.isFinite(columnsRaw) && columnsRaw > 0 ? Math.round(columnsRaw) : fallbackColumns;
+  const rows = Number.isFinite(rowsRaw) && rowsRaw > 0 ? Math.round(rowsRaw) : fallbackRows;
+
+  if (!columns || !rows) {
+    throw new Error('AI suggestion did not provide a usable grid.');
+  }
+
+  const confidenceRaw = Number(parsed.confidence);
+  const confidence = Number.isFinite(confidenceRaw)
+    ? Math.min(1, Math.max(0, confidenceRaw))
+    : undefined;
+
+  const notes = typeof parsed.notes === 'string' ? parsed.notes : undefined;
+
+  return {
+    frameWidth,
+    frameHeight,
+    columns,
+    rows,
+    confidence,
+    notes,
+  };
+};
+
 const toBlob = (canvas: HTMLCanvasElement): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -112,11 +249,19 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
   const [selectedFrames, setSelectedFrames] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasAiSupport, setHasAiSupport] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<AiSliceSuggestion | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  useEffect(() => {
+    setHasAiSupport(Boolean(getWindowAiAssistant()));
   }, []);
 
   useEffect(() => {
@@ -142,6 +287,11 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
       }
     };
   }, [sheet]);
+
+  useEffect(() => {
+    setAiSuggestion(null);
+    setAiError(null);
+  }, [sheet?.url]);
 
   const columns = useMemo(() => {
     if (!sheet || frameWidth <= 0) {
@@ -172,6 +322,7 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
   }, [endFrame, maxFrames]);
 
   const hasManualSelection = selectedFrames.size > 0;
+  const aiIsDisabled = disabled || isProcessing || isAiProcessing;
 
   const defaultSelectedFrames = useMemo(() => {
     if (!normalizedEnd) {
@@ -245,6 +396,8 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
         setStartFrame(1);
         setEndFrame(null);
         setSelectedFrames(new Set());
+        setAiSuggestion(null);
+        setAiError(null);
       };
 
       image.onerror = () => {
@@ -258,6 +411,75 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
       image.src = url;
     },
     []
+  );
+
+  const handleAiAssist = useCallback(async () => {
+    if (!sheet) {
+      setAiError('Load a sprite sheet to request AI assistance.');
+      return;
+    }
+    const assistant = getWindowAiAssistant();
+    if (!assistant) {
+      setAiError('AI assistance is not available in this browser.');
+      setHasAiSupport(false);
+      return;
+    }
+
+    let session: WindowAiAssistantSession | null = null;
+    setIsAiProcessing(true);
+    setAiError(null);
+    try {
+      const preview = createPreviewDataUrl(sheet);
+      session = await assistant.create({
+        instructions:
+          'You help identify sprite sheet slicing dimensions. Always respond with JSON containing frameWidth, frameHeight, columns, rows, confidence (0-1), and notes.',
+      });
+      const response = await session.prompt(
+        [
+          'Analyse this sprite sheet and suggest how to slice it into even frames.',
+          'Return ONLY JSON using the keys frameWidth, frameHeight, columns, rows, confidence, and notes.',
+          `Sheet width: ${sheet.width}`,
+          `Sheet height: ${sheet.height}`,
+          `Sprite sheet preview (data URL): ${preview}`,
+        ].join('\n')
+      );
+      const text = extractAssistantText(response).trim();
+      if (!text) {
+        throw new Error('AI response was empty.');
+      }
+      const suggestion = parseAiSuggestion(text, sheet);
+      setAiSuggestion(suggestion);
+    } catch (assistantError) {
+      const message =
+        assistantError instanceof Error
+          ? assistantError.message
+          : 'Unable to retrieve AI suggestion. Try again.';
+      setAiError(message);
+    } finally {
+      setIsAiProcessing(false);
+      try {
+        if (session?.destroy) {
+          await session.destroy();
+        }
+      } catch (cleanupError) {
+        console.warn('Failed to close AI session', cleanupError);
+      }
+    }
+  }, [sheet]);
+
+  const handleApplySuggestion = useCallback(
+    (suggestion: AiSliceSuggestion) => {
+      if (isProcessing) {
+        return;
+      }
+      setFrameWidth(suggestion.frameWidth);
+      setFrameHeight(suggestion.frameHeight);
+      setStartFrame(1);
+      setEndFrame(suggestion.columns * suggestion.rows || null);
+      setSelectedFrames(new Set());
+      setAiError(null);
+    },
+    [isProcessing]
   );
 
   const handleImport = useCallback(async () => {
@@ -465,6 +687,92 @@ export const SpriteSheetImporter = ({ disabled = false, onCancel, onImport }: Sp
                     Clear manual selection
                   </button>
                 ) : null}
+              </div>
+              <div className={`sheet-ai${hasAiSupport ? '' : ' is-disabled'}`}>
+                <div>
+                  <strong>AI slice assist</strong>
+                  <p>
+                    Ask a compatible browser AI model to suggest frame dimensions for the current
+                    sprite sheet.
+                  </p>
+                </div>
+                {hasAiSupport ? (
+                  <>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={handleAiAssist}
+                      disabled={aiIsDisabled}
+                    >
+                      {isAiProcessing ? 'Requesting suggestion…' : 'Ask AI for suggestion'}
+                    </button>
+                    {aiSuggestion ? (
+                      <div className="sheet-ai-suggestion">
+                        <dl>
+                          <div>
+                            <dt>Frame width</dt>
+                            <dd>{aiSuggestion.frameWidth}</dd>
+                          </div>
+                          <div>
+                            <dt>Frame height</dt>
+                            <dd>{aiSuggestion.frameHeight}</dd>
+                          </div>
+                          <div>
+                            <dt>Columns</dt>
+                            <dd>{aiSuggestion.columns}</dd>
+                          </div>
+                          <div>
+                            <dt>Rows</dt>
+                            <dd>{aiSuggestion.rows}</dd>
+                          </div>
+                          <div>
+                            <dt>Confidence</dt>
+                            <dd>
+                              {aiSuggestion.confidence !== undefined
+                                ? `${Math.round(aiSuggestion.confidence * 100)}%`
+                                : '—'}
+                            </dd>
+                          </div>
+                        </dl>
+                        {aiSuggestion.notes ? (
+                          <p className="sheet-ai-notes">{aiSuggestion.notes}</p>
+                        ) : null}
+                        <div className="sheet-ai-actions">
+                          <button
+                            type="button"
+                            className="primary-action"
+                            onClick={() => handleApplySuggestion(aiSuggestion)}
+                            disabled={aiIsDisabled}
+                          >
+                            Apply suggestion
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => setAiSuggestion(null)}
+                            disabled={isAiProcessing}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {aiError ? (
+                      <p className="sheet-ai-message is-error" role="status">
+                        {aiError}
+                      </p>
+                    ) : (
+                      <p className="sheet-ai-message">
+                        Suggestions are generated locally through the experimental Web AI API.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="sheet-ai-message">
+                    AI assistance requires a browser that exposes the Web AI API. You can still
+                    configure slices manually.
+                  </p>
+                )}
               </div>
               <dl className="sheet-summary">
                 <div>
