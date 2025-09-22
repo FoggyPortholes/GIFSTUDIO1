@@ -175,16 +175,17 @@ function resolveNodeEnvironment(root) {
   if (portableNode) {
     const npm = resolveNpmForNode(portableNode);
     if (!npm) {
-      throw new Error('Found node-portable but npm was not located next to it.');
+      logWarn('Found node-portable but npm was not located next to it; falling back to system runtime.');
+    } else {
+      const env = { ...process.env };
+      env.PATH = buildPath(env.PATH, path.dirname(portableNode));
+      return {
+        label: 'portable',
+        nodePath: portableNode,
+        npm,
+        env
+      };
     }
-    const env = { ...process.env };
-    env.PATH = buildPath(env.PATH, path.dirname(portableNode));
-    return {
-      label: 'portable',
-      nodePath: portableNode,
-      npm,
-      env
-    };
   }
 
   const npm = resolveSystemNpm();
