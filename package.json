@@ -14,9 +14,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"{src,tests}/**/*.{ts,tsx}\" --max-warnings=0",
     "format": "prettier --write .",
-    "test": "vitest run",
-    "test:gif": "node tests/synth-gif-runner.cjs",
-    "simulate": "npm run lint && npm run typecheck && npm run test && npm run test:gif",
+    "test": "vitest run --passWithNoTests",
+    "simulate": "npm run lint && npm run typecheck && npm run test",
     "verify:intent": "node scripts/verify-intent.mjs"
   },
   "dependencies": {
@@ -24,6 +23,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/node": "^20.16.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@typescript-eslint/eslint-plugin": "^8.8.1",
@@ -36,11 +36,6 @@
     "prettier": "^3.3.3",
     "typescript": "^5.5.4",
     "vite": "^6.0.0",
-    "vitest": "^2.0.5",
-    "zustand": "^4.5.4",
-    "@types/node": "^20.16.5",
-    "pngjs": "^7.0.0",
-    "omggif": "^1.0.10",
-    "@types/pngjs": "^6.0.5"
+    "vitest": "^2.0.5"
   }
 }

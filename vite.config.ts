@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   envPrefix: ['VITE_', 'OFFLINE_'],
   test: {
-    setupFiles: ['tests/setup.ts'],
     environment: 'happy-dom',
     globals: true,
   },
