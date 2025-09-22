@@ -1,28 +1,27 @@
 # GIF Studio
 
-A fresh, from-scratch rebuild of GIF Studio focused on a streamlined, entirely client-side animation workflow. Upload stills,
-organise their order, preview timing, and export polished GIFs without any backend services.
+A renewed, from-scratch take on GIF Studio with a focused, client-only workflow. Drag in stills, curate a timeline, preview playback, and export a polished GIF without leaving the browser.
 
 ## Features
 
-- **Drag & drop uploads** for PNG, JPG, WEBP, and GIF assets (first frame rendered for GIFs).
-- **Timeline management** with thumbnail previews, quick reordering, and one-click removal.
-- **Live playback preview** with adjustable frame delay and loop control.
-- **Configurable export** canvas (size, background colour, and fit mode) powered by [`gifenc`](https://github.com/mattdesl/gifenc).
-- **Offline-first** – all processing happens locally in the browser.
+- **Smart frame ingestion** – drag & drop or browse for PNG, JPG, WEBP, and GIF files (GIFs load their first frame).
+- **Timeline management** – reorder with one-click bumpers, inspect dimensions, and clear the entire stack instantly.
+- **Live preview** – tune playback speed and looping with immediate visual feedback.
+- **Configurable export** – choose output dimensions, background colour, and fit mode before encoding with [`gifenc`](https://github.com/mattdesl/gifenc).
+- **Zero backends** – every operation happens locally for offline-friendly authoring.
 
 ## Getting Started
 
-Install dependencies once and launch the Vite dev server:
+Install dependencies and start the Vite dev server:
 
 ```bash
 npm install
 npm run dev
 ```
 
+> The `npm run dev` command checks your current Node.js runtime. If it is older than 18 it automatically falls back to the bundled `node-portable` build (Node 20) so Windows contributors can launch without touching their global install. You can force the portable runtime via `node scripts/launch.js dev:vite`.
 
-
-Build production assets with:
+Create a production build with:
 
 ```bash
 npm run build
@@ -30,19 +29,21 @@ npm run build
 
 ## Quality Checks
 
-Run the lint and TypeScript suites to keep the project healthy:
+Keep the project healthy with the standard tooling:
 
 ```bash
 npm run lint
 npm run typecheck
+npm run test
 ```
+
+Run `npm run simulate` locally before publishing major encoder or runtime changes to execute the full lint, type-check, unit, and GIF verification chain.
 
 ## Project Structure
 
-- `src/App.tsx` – application shell, state management, and feature orchestration.
-- `src/components/` – reusable UI components for uploading, timeline management, preview, and exporting.
-- `src/lib/` – helper utilities for ID generation, frame loading, geometry calculations, and GIF encoding.
-- `src/types/` – shared TypeScript types and lightweight ambient declarations.
-- `public/` – static assets served by Vite.
+- `src/features/` – feature-scoped UI and state (studio provider, uploader, timeline, preview, export, and shared UI primitives).
+- `src/lib/` – utilities for ID creation, frame ingestion, geometry helpers, and GIF encoding.
+- `src/types/` – shared TypeScript models and ambient declarations.
+- `public/` – static assets served directly by Vite.
 
 Happy animating!
