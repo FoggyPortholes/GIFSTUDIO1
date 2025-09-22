@@ -108,6 +108,21 @@ const StudioShell = () => {
     [addFrames, showToast]
   );
 
+  const handleSpriteFrames = useCallback(
+    (spriteFrames: FrameAsset[], meta?: { sourceName?: string }) => {
+      if (!spriteFrames.length) {
+        showToast('No frames were created from the sprite sheet.', 'error');
+        return;
+      }
+
+      addFrames(spriteFrames);
+      const baseMessage = `${spriteFrames.length} frame${spriteFrames.length === 1 ? '' : 's'} added`;
+      const details = meta?.sourceName ? ` from ${meta.sourceName}` : '';
+      showToast(`${baseMessage}${details}.`);
+    },
+    [addFrames, showToast]
+  );
+
   const handleMove = useCallback(
     (id: string, targetIndex: number) => {
       moveFrame(id, targetIndex);
@@ -173,7 +188,7 @@ const StudioShell = () => {
       </header>
       <main>
         <section className="column">
-          <FrameUploader onFiles={handleFiles} disabled={isExporting} />
+          <FrameUploader onFiles={handleFiles} onFrames={handleSpriteFrames} disabled={isExporting} />
           <TimelinePanel
             frames={frames}
             currentId={frames[currentIndex]?.id ?? null}
