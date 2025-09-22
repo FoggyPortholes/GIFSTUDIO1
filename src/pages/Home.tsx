@@ -1,48 +1,41 @@
-import { useMemo, useState } from 'react';
-import { CharacterForm } from '../components/CharacterForm';
-import { GenerationGrid } from '../components/GenerationGrid';
+import { useState } from 'react';
+import { CharacterCreator } from '../components/CharacterCreator';
 import { GifBuilder } from '../components/GifBuilder';
 import { APP_INTENT } from '../intent';
-import { characterToPrompt } from '../domain/character';
-import { generateCharacterImages, type AiProviderName } from '../services/ai';
+import { generateCharacterImages } from '../services/ai';
 import { useAppStore } from '../state/store';
 
-const PROVIDER_LABELS: Record<AiProviderName, string> = {
-  openai: 'OpenAI',
-  stability: 'Stability AI',
-  automatic1111: 'AUTOMATIC1111',
-};
-
 export default function Home() {
-  const character = useAppStore((state) => state.character);
-  const setGeneratedImages = useAppStore((state) => state.setGeneratedImages);
-  const addGeneratedImages = useAppStore((state) => state.addGeneratedImages);
+  const offlineMode = useAppStore((state) => state.offlineMode);
+  const addFrames = useAppStore((state) => state.addFrames);
 
-  const [provider, setProvider] = useState<AiProviderName>('openai');
+  const [stubPrompt, setStubPrompt] = useState('Offline hero concept');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [append, setAppend] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState<string | null>(null);
 
-  const prompt = useMemo(() => characterToPrompt(character), [character]);
-
-  const handleGenerate = async () => {
+  const handleGenerateStub = async () => {
     setIsGenerating(true);
-    setError(null);
+    setGenerationMessage(null);
     try {
       const images = await generateCharacterImages({
-        provider,
-        prompt: prompt.positive,
-        negativePrompt: prompt.negative,
-        count: 4,
+        provider: 'stub',
+        prompt: stubPrompt,
+        negativePrompt: '',
+        count: 3,
       });
-      if (append) {
-        addGeneratedImages(images);
-      } else {
-        setGeneratedImages(images);
-      }
-    } catch (generationError) {
-      const message = generationError instanceof Error ? generationError.message : 'Generation failed.';
-      setError(message);
+      addFrames(
+        images.map((image, index) => ({
+          id: image.id,
+          name: image.description || `Stub frame #${index + 1}`,
+          url: image.url,
+          source: 'stub',
+          placeholder: image.placeholder,
+        })),
+      );
+      setGenerationMessage('Stub frames added to GIF builder.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to generate stub frames.';
+      setGenerationMessage(message);
     } finally {
       setIsGenerating(false);
     }
@@ -55,57 +48,44 @@ export default function Home() {
           <p className="page__intent">{APP_INTENT}</p>
           <h1>Gif Studio</h1>
           <p className="page__summary">
-            Craft characters, generate reference frames with your preferred provider, then export a looping GIF.
+            Stay offline and keep creating. Layer local character parts, drop in any PNGs, and export a polished GIF.
           </p>
-        </div>
-        <div className="provider-picker">
-          <label>
-            <span>Provider</span>
-            <select value={provider} onChange={(event) => setProvider(event.target.value as AiProviderName)}>
-              {Object.entries(PROVIDER_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="toggle">
-            <input type="checkbox" checked={append} onChange={() => setAppend(!append)} />
-            <span>Append to existing grid</span>
-          </label>
-          <button type="button" className="button button--primary" onClick={handleGenerate} disabled={isGenerating}>
-            {isGenerating ? 'Generating...' : 'Generate Frames'}
-          </button>
         </div>
       </header>
 
+      {offlineMode && (
+        <div className="offline-banner" role="status">
+          <strong>Offline Mode Enabled</strong>
+          <span>Using local assets and stub providers. No network calls will be made.</span>
+        </div>
+      )}
+
       <main className="page__body">
-        <CharacterForm />
-        <section className="panel" aria-labelledby="prompt-preview-heading">
+        <section className="panel" aria-labelledby="stub-provider-heading">
           <div className="panel__header">
             <div>
-              <h2 id="prompt-preview-heading">Prompt Preview</h2>
-              <p>Review the composed prompt before requesting a generation.</p>
+              <h2 id="stub-provider-heading">Stub Frame Library</h2>
+              <p>Generate placeholder frames bundled with the app, handy for quick animations.</p>
             </div>
           </div>
-          <dl className="prompt-preview">
-            <div>
-              <dt>Positive</dt>
-              <dd>{prompt.positive}</dd>
-            </div>
-            <div>
-              <dt>Negative</dt>
-              <dd>{prompt.negative}</dd>
-            </div>
-            <div>
-              <dt>Summary</dt>
-              <dd>{prompt.summary}</dd>
-            </div>
-          </dl>
-          {error && <p className="panel__error">{error}</p>}
+          <div className="stub-controls">
+            <label className="form-field form-field--wide">
+              <span>Prompt</span>
+              <input
+                type="text"
+                value={stubPrompt}
+                onChange={(event) => setStubPrompt(event.target.value)}
+                placeholder="Describe your offline hero"
+              />
+            </label>
+            <button type="button" className="button button--primary" onClick={handleGenerateStub} disabled={isGenerating}>
+              {isGenerating ? 'Generating...' : 'Add Stub Frames'}
+            </button>
+          </div>
+          {generationMessage && <p className="panel__info">{generationMessage}</p>}
         </section>
 
-        <GenerationGrid />
+        <CharacterCreator />
         <GifBuilder />
       </main>
     </div>

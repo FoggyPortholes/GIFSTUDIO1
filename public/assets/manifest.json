@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "bodies": [
+    { "id": "body-a", "label": "Azure Armor", "src": "/assets/characters/bodies/body-a.png" }
+  ],
+  "heads": [
+    { "id": "head-a", "label": "Skybound", "src": "/assets/characters/heads/head-a.png" }
+  ],
+  "outfits": [
+    { "id": "outfit-a", "label": "Midnight Guard", "src": "/assets/characters/outfits/outfit-a.png" }
+  ]
+}

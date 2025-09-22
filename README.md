@@ -1,37 +1,68 @@
-# Gif Studio — Spicy Pickle (Lite Debug Edition) v1.3.1
+# GIF Studio (Offline Edition)
 
-This package contains the full app source and one-click launchers for Windows (PowerShell and BAT), plus a Unix launcher.
-First run downloads **Node.js portable** automatically, installs dependencies, and opens the app.
+GIF Studio ships fully offline. Local character layers, stub AI frames, and the GIF builder all work without
+network access or API keys. Real AI providers remain optional enhancements for connected environments.
 
-## Quick Start
-1) Extract this zip to a folder (avoid Desktop if you have strict policies).
-2) Windows: double-click **launch.ps1** (or **launch.bat**).  
-   macOS/Linux: run `./launch.sh` (Node.js 18+ required in PATH).
-3) Your browser opens at `http://localhost:5173` (or the next free port).
-4) In the app, click **Test GIF** to confirm the encoder works.  
-   CI also runs `npm run test:gif` to create `public/animation.gif`.
+## Launching
 
-## Features
-- Debug tab with live logs, **Download Logs**, **Download Last GIF**.
-- GIF validator (checks header `GIF87a/89a` and trailer `;`).
-- Palette fix (first frame includes `{ palette }`).
-- One-click launch with transcript logs in `logs/` (created if missing)
-- Unix launcher (`launch.sh`)
-- CI: test/build on pushes; release zip on tags `v*.*.*`
-- `npm run test:gif` encodes a synthetic animation in Node and saves it to `public/animation.gif`.
-- Auto-downloads Node.js portable v20.17.0 (x64) and **flattens** the folder so `npm.cmd` is found.
+```bash
+node scripts/launch.js
+```
 
-## Testing
+The launcher detects the bundled `node-portable/` runtime when present, installs dependencies if needed, and starts
+Vite. To ensure the client stays offline, either keep `.env` set to `OFFLINE_MODE=true` (default) or prefix the command:
+
+```bash
+OFFLINE_MODE=true npm run dev
+```
+
+On Windows PowerShell you can run `Set-Content .env 'OFFLINE_MODE=true'` once and reuse it.
+
+## Offline Character Creator
+
+- Local assets live under `public/assets/characters/` with a manifest describing bodies, heads, and outfits.
+- The **Character Creator** (see `src/components/CharacterCreator/`) lets you mix parts, preview the layered canvas,
+  and export the composite directly to the GIF builder.
+- Stub AI frames reside in `public/stubs/` for quick filler or testing and are used automatically when the app detects
+  offline mode or missing credentials.
+
+## GIF Builder
+
+The updated builder accepts:
+
+- Exports from the Character Creator
+- Drag-and-drop PNG/JPG uploads
+- Generated stub frames
+
+You can reorder frames, tweak the delay slider, toggle looping, and export either the animated GIF or a PNG sequence.
+All encoding happens client-side/offline using `gifenc`.
+
+## Testing & Tooling
 
 ```bash
 npm install
+npm run typecheck
+npm run test           # Vitest (offline guard enabled)
+npm run test:gif       # Rebuilds public/animation.gif from stub assets
 npm run build
-npm run test:gif
 ```
 
-The Node test writes `public/animation.gif` which you can inspect in any image viewer.
+`tests/setup.ts` blocks accidental outbound HTTP(S) calls so suites fail fast if code tries to hit the network.
+`synth-gif-runner.cjs` generates `public/animation.gif` from the stub PNGs and asserts consistent metadata.
 
-## Troubleshooting
-- If launch fails, delete the `node-portable/` folder and run `launch.ps1` again.
-- If a GIF won’t open in VLC, open it in **Photos** or a **web browser**.
-- Use the **Debug** tab to download logs and the raw last GIF for inspection.
+## Optional AI Providers
+
+When credentials are supplied (`VITE_OPENAI_API_KEY`, `VITE_STABILITY_API_KEY`, `VITE_AUTOMATIC1111_URL`, etc.), the
+provider hooks can be re-enabled by turning `OFFLINE_MODE` off. Without keys—or with `OFFLINE_MODE=true`—the app stays
+strictly local and uses stubbed imagery.
+
+## Repository Layout
+
+- `public/assets/` – Local character parts and manifest
+- `public/stubs/` – Sample frames used by stub provider + tests
+- `src/components/CharacterCreator/` – Offline character builder
+- `src/components/GifBuilder.tsx` – Enhanced drag/drop GIF pipeline
+- `scripts/launch.js` – Cross-platform launcher (replaces platform-specific scripts)
+- `tests/` – Offline-aware unit tests + synthetic GIF generator
+
+Happy offline animating!

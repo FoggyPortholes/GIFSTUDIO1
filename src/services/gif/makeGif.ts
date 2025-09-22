@@ -30,10 +30,11 @@ export function makeGif(frames: GifFrame[], options: GifOptions): Uint8Array {
   frames.forEach((frame) => {
     const palette = quantize(frame.rgba, 256);
     const indexed = applyPalette(frame.rgba, palette);
+    const delayCs = Math.max(2, Math.round(frame.delayMs / 10)); // gifenc expects centiseconds
 
     encoder.writeFrame(indexed, frame.width, frame.height, {
       palette,
-      delay: Math.max(2, Math.round(frame.delayMs / 10)),
+      delay: delayCs,
       repeat,
     });
   });
@@ -42,3 +43,4 @@ export function makeGif(frames: GifFrame[], options: GifOptions): Uint8Array {
   const bytes = encoder.bytesView();
   return bytes.slice();
 }
+

@@ -1,12 +1,17 @@
+# Runtime artifacts
 node_modules/
 dist/
+.vite/
+logs/
+public/animation.gif
 build/
 build-tests/
-logs/
-.vite/
-public/animation.gif
+
+# OS clutter
 *.log
 .DS_Store
 Thumbs.db
+
+# Editor configs
 .vscode/
 .idea/
