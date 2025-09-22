@@ -32,10 +32,10 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "gifenc": "^1.0.2",
-    "happy-dom": "^14.12.3",
+    "happy-dom": "^18.0.1",
     "prettier": "^3.3.3",
     "typescript": "^5.5.4",
     "vite": "^6.0.0",
-    "vitest": "^2.0.5"
+    "vitest": "^3.2.4"
   }
 }
