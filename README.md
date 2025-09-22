@@ -12,19 +12,22 @@ A renewed, from-scratch take on GIF Studio with a focused, client-only workflow.
 
 ## Getting Started
 
-Install dependencies and start the Vite dev server:
+Install dependencies and choose one of the launch commands below:
 
 ```bash
 npm install
-npm run dev
 ```
 
-> The `npm run dev` command checks your current Node.js runtime. If it is older than 18 it automatically falls back to the bundled `node-portable` build (Node 20) so Windows contributors can launch without touching their global install. You can force the portable runtime via `node scripts/launch.js dev:vite`.
+### Launching the app during development
 
-Create a production build with:
+- **Standard Vite server** – run `npm run dev` to boot the development server at http://localhost:5173. The command automatically checks your local Node.js runtime and, if it is older than version 18, falls back to the bundled `node-portable` build (Node 20).
+- **Force the portable runtime** – run `node scripts/launch.js dev:vite` to explicitly launch Vite with the repository-managed Node runtime. This is handy on Windows when you do not want to touch a system-wide Node installation.
+
+### Building and previewing production output
 
 ```bash
 npm run build
+npm run preview
 ```
 
 ## Quality Checks
