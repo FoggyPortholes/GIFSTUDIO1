@@ -1,10 +1,7 @@
-Gif Studio — Spicy Pickle (Lite Debug) v1.3.1
+Gif Studio — Rebuilt Edition v2.0.0
 ====================================================
-- One-click Windows launch (PowerShell + BAT)
-- Portable Node.js auto-download + flattened folder
-- Debug tab with live logs
-- Downloadable logs and last GIF bytes
-- Test GIF generator (red→blue)
-- GIF validator (header/trailer)
-- Palette fix on first frame
-- Node GIF smoke test (`npm run test:gif`) writes `public/animation.gif`
+- Drag & drop frame ingestion with type filtering
+- Timeline reorder controls with inline stats
+- Live preview with adjustable delay and loop toggle
+- Export dimensions, background colour, and fit presets
+- Lessons learned panel capturing rebuild takeaways
